@@ -154,6 +154,25 @@ class Objective:
     progress: Optional[Tuple[int, int]] = None
 
 
+def objective_to_dict(obj: Objective) -> Dict[str, Any]:
+    return {
+        "id": obj.id,
+        "text": obj.text,
+        "done": obj.done,
+        "progress": list(obj.progress) if obj.progress else None,
+    }
+
+
+def objective_from_dict(data: Dict[str, Any]) -> Objective:
+    progress = data.get("progress")
+    return Objective(
+        id=str(data["id"]),
+        text=str(data.get("text", "")),
+        done=bool(data.get("done", False)),
+        progress=tuple(progress) if progress else None,
+    )
+
+
 @dataclass
 class QuestTemplate:
     id: str
@@ -173,12 +192,53 @@ class QuestInstance:
     started_at: datetime = field(default_factory=lambda: utcnow())
     completed_at: Optional[datetime] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "template_id": self.template_id,
+            "status": self.status.value,
+            "objectives": [objective_to_dict(obj) for obj in self.objectives],
+            "started_at": self.started_at.isoformat(),
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "QuestInstance":
+        return cls(
+            id=str(data["id"]),
+            template_id=str(data["template_id"]),
+            status=QuestStatus(data.get("status", QuestStatus.active.value)),
+            objectives=[objective_from_dict(obj) for obj in data.get("objectives", [])],
+            started_at=datetime.fromisoformat(data["started_at"])
+            if data.get("started_at")
+            else utcnow(),
+            completed_at=datetime.fromisoformat(data["completed_at"])
+            if data.get("completed_at")
+            else None,
+        )
+
 
 @dataclass
 class ChoiceOption:
     id: str
     label: str
     payload: Dict[str, Any] = field(default_factory=dict)
+
+
+def choice_to_dict(choice: ChoiceOption) -> Dict[str, Any]:
+    return {
+        "id": choice.id,
+        "label": choice.label,
+        "payload": choice.payload,
+    }
+
+
+def choice_from_dict(data: Dict[str, Any]) -> ChoiceOption:
+    return ChoiceOption(
+        id=str(data["id"]),
+        label=str(data.get("label", "")),
+        payload=dict(data.get("payload", {})),
+    )
 
 
 @dataclass
@@ -193,6 +253,37 @@ class SystemMessage:
     chosen_option_id: Optional[str] = None
     sound: MessageSeverity = MessageSeverity.info
     effect: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "created_at": self.created_at.isoformat(),
+            "severity": self.severity.value,
+            "title": self.title,
+            "body": self.body,
+            "collapsible": self.collapsible,
+            "choices": [choice_to_dict(choice) for choice in self.choices],
+            "chosen_option_id": self.chosen_option_id,
+            "sound": self.sound.value,
+            "effect": self.effect,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SystemMessage":
+        return cls(
+            id=str(data["id"]),
+            created_at=datetime.fromisoformat(data["created_at"])
+            if data.get("created_at")
+            else utcnow(),
+            severity=MessageSeverity(data.get("severity", MessageSeverity.info.value)),
+            title=str(data.get("title", "")),
+            body=str(data.get("body", "")),
+            collapsible=bool(data.get("collapsible", True)),
+            choices=[choice_from_dict(choice) for choice in data.get("choices", [])],
+            chosen_option_id=data.get("chosen_option_id"),
+            sound=MessageSeverity(data.get("sound", MessageSeverity.info.value)),
+            effect=data.get("effect"),
+        )
 
 
 @dataclass
