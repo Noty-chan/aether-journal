@@ -9,8 +9,12 @@ from domain.events import EventLogEntry
 from domain.helpers import new_id, utcnow
 from domain.models import (
     CampaignState,
+    ChatContact,
+    ChatMessage,
+    ChatThread,
     ClassDefinition,
     EquipmentSlot,
+    FriendRequest,
     ItemInstance,
     MessageSeverity,
     QuestInstance,
@@ -256,6 +260,139 @@ class CampaignService:
             )
         ]
 
+    def add_chat_contact(
+        self,
+        display_name: str,
+        link_payload: Optional[dict] = None,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        contact = ChatContact(
+            id=new_id("contact"),
+            display_name=display_name,
+            link_payload=link_payload or {},
+        )
+        self.state.contacts[contact.id] = contact
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind="chat.contact.added",
+                payload={
+                    "contact_id": contact.id,
+                    "display_name": contact.display_name,
+                },
+            )
+        ]
+
+    def send_friend_request(
+        self,
+        contact_id: str,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        if contact_id not in self.state.contacts:
+            raise DomainError("Chat contact not found")
+        request = FriendRequest(
+            id=new_id("req"),
+            contact_id=contact_id,
+            created_at=utcnow(),
+        )
+        self.state.friend_requests[request.id] = request
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind="chat.friend_request.sent",
+                payload={
+                    "request_id": request.id,
+                    "contact_id": contact_id,
+                },
+            )
+        ]
+
+    def accept_friend_request(
+        self,
+        request_id: str,
+        actor_role: str = PLAYER_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_player(actor_role)
+        ensure_player_can_act(self.state.character)
+        request = self.state.friend_requests.get(request_id)
+        if not request:
+            raise DomainError("Friend request not found")
+        if request.accepted:
+            raise DomainError("Friend request already accepted")
+        request.accepted = True
+        request.accepted_at = utcnow()
+        chat = self._get_or_create_chat_thread(request.contact_id)
+        chat.opened = True
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind="chat.friend_request.accepted",
+                payload={
+                    "request_id": request.id,
+                    "contact_id": request.contact_id,
+                    "chat_id": chat.id,
+                },
+            )
+        ]
+
+    def send_chat_message(
+        self,
+        chat_id: str,
+        text: str,
+        links: Optional[List[dict]] = None,
+        sender_contact_id: Optional[str] = None,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        if actor_role == HOST_ROLE:
+            ensure_host(actor_role)
+        else:
+            ensure_player(actor_role)
+            ensure_player_can_act(self.state.character)
+        chat = self.state.chats.get(chat_id)
+        if not chat:
+            raise DomainError("Chat thread not found")
+        if actor_role == PLAYER_ROLE:
+            sender_id = self.state.character.id
+        else:
+            if not sender_contact_id:
+                raise DomainError("Sender contact required")
+            if sender_contact_id not in self.state.contacts:
+                raise DomainError("Sender contact not found")
+            if sender_contact_id != chat.contact_id:
+                raise DomainError("Sender does not match chat contact")
+            sender_id = sender_contact_id
+        message = ChatMessage(
+            id=new_id("chatmsg"),
+            chat_id=chat_id,
+            sender_contact_id=sender_id,
+            text=text,
+            created_at=utcnow(),
+            links=list(links or []),
+        )
+        chat.messages.append(message)
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind="chat.message",
+                payload={
+                    "chat_id": chat_id,
+                    "message_id": message.id,
+                    "sender_contact_id": sender_id,
+                    "text": text,
+                },
+            )
+        ]
+
     def _get_class_def(self) -> ClassDefinition:
         class_def = self.state.classes.get(self.state.character.class_id)
         if not class_def:
@@ -299,3 +436,11 @@ class CampaignService:
                 )
             )
         return events
+
+    def _get_or_create_chat_thread(self, contact_id: str) -> ChatThread:
+        for chat in self.state.chats.values():
+            if chat.contact_id == contact_id:
+                return chat
+        chat = ChatThread(id=new_id("chat"), contact_id=contact_id, opened=False)
+        self.state.chats[chat.id] = chat
+        return chat

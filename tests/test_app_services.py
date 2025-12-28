@@ -3,6 +3,7 @@ import pytest
 from app.permissions import PLAYER_ROLE
 from app.services import CampaignService
 from domain.errors import QuestError
+from domain.errors import DomainError
 from domain.models import EquipmentSlot, ItemInstance, ItemTemplate, ItemType, Objective, QuestTemplate
 from storage.json_repo import create_default_campaign_state
 
@@ -44,3 +45,47 @@ def test_request_equip_item_does_not_mutate():
 
     assert events[0].kind == "equipment.requested"
     assert state.character.equipment.slots[EquipmentSlot.weapon_1] is None
+
+
+def test_friend_request_accept_creates_chat():
+    state = create_default_campaign_state()
+    service = CampaignService(state)
+
+    contact_events = service.add_chat_contact(display_name="NPC")
+    contact_id = contact_events[0].payload["contact_id"]
+
+    request_events = service.send_friend_request(contact_id=contact_id)
+    request_id = request_events[0].payload["request_id"]
+
+    accept_events = service.accept_friend_request(request_id=request_id, actor_role=PLAYER_ROLE)
+
+    assert accept_events[0].kind == "chat.friend_request.accepted"
+    assert state.friend_requests[request_id].accepted is True
+    chat_id = accept_events[0].payload["chat_id"]
+    assert chat_id in state.chats
+    assert state.chats[chat_id].opened is True
+
+
+def test_host_chat_message_requires_contact():
+    state = create_default_campaign_state()
+    service = CampaignService(state)
+
+    contact_events = service.add_chat_contact(display_name="NPC")
+    contact_id = contact_events[0].payload["contact_id"]
+    request_events = service.send_friend_request(contact_id=contact_id)
+    request_id = request_events[0].payload["request_id"]
+    accept_events = service.accept_friend_request(request_id=request_id, actor_role=PLAYER_ROLE)
+    chat_id = accept_events[0].payload["chat_id"]
+
+    with pytest.raises(DomainError):
+        service.send_chat_message(chat_id=chat_id, text="Hi", actor_role="host")
+
+    events = service.send_chat_message(
+        chat_id=chat_id,
+        text="Hello",
+        sender_contact_id=contact_id,
+        actor_role="host",
+    )
+
+    assert events[0].kind == "chat.message"
+    assert state.chats[chat_id].messages[0].text == "Hello"
