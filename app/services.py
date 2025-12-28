@@ -389,6 +389,7 @@ class CampaignService:
                     "message_id": message.id,
                     "sender_contact_id": sender_id,
                     "text": text,
+                    "links": message.links,
                 },
             )
         ]

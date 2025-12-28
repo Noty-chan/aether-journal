@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aether Journal — Player Chat</title>
+    <style>
+      body {
+        font-family: "Inter", "Segoe UI", sans-serif;
+        margin: 24px;
+        background: #0b0e14;
+        color: #f2f4f8;
+      }
+      .panel {
+        max-width: 720px;
+        padding: 16px;
+        border: 1px solid #2c313a;
+        border-radius: 12px;
+        background: #121622;
+        margin-bottom: 16px;
+      }
+      label {
+        display: block;
+        margin: 12px 0 6px;
+        font-weight: 600;
+      }
+      input,
+      select,
+      textarea,
+      button {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid #2c313a;
+        background: #0b0e14;
+        color: #f2f4f8;
+      }
+      textarea {
+        min-height: 120px;
+      }
+      button {
+        cursor: pointer;
+        background: #1f8a4c;
+        border: none;
+        margin-top: 12px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .link-list {
+        list-style: none;
+        padding: 0;
+        margin: 12px 0 0;
+      }
+      .link-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #1a2133;
+        padding: 8px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+      }
+      .link-list button {
+        width: auto;
+        padding: 6px 10px;
+        background: #3a4153;
+      }
+      .status {
+        margin-top: 8px;
+        font-size: 14px;
+        color: #9aa3b2;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Player чат</h1>
+
+    <div class="panel">
+      <h2>Подключение</h2>
+      <label for="token">Player token</label>
+      <input id="token" placeholder="Вставьте player token" />
+      <button id="load-linkables" type="button">Загрузить данные кампании</button>
+      <div id="load-status" class="status"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Новое сообщение</h2>
+      <label for="chat-id">Chat ID</label>
+      <input id="chat-id" placeholder="chat_..." />
+
+      <label for="message-text">Текст сообщения</label>
+      <textarea id="message-text" placeholder="Введите сообщение"></textarea>
+
+      <label>Ссылки</label>
+      <div class="row">
+        <select id="link-type">
+          <option value="npc">NPC</option>
+          <option value="quest">Квест</option>
+          <option value="item">Предмет</option>
+        </select>
+        <select id="link-entity"></select>
+      </div>
+      <button id="add-link" type="button">Добавить ссылку</button>
+
+      <ul id="link-list" class="link-list"></ul>
+
+      <button id="send-message" type="button">Отправить сообщение</button>
+      <div id="send-status" class="status"></div>
+    </div>
+
+    <script>
+      const state = {
+        linkables: { npc: [], quest: [], item: [] },
+        selectedLinks: [],
+      };
+
+      const tokenInput = document.getElementById("token");
+      const loadButton = document.getElementById("load-linkables");
+      const loadStatus = document.getElementById("load-status");
+      const linkTypeSelect = document.getElementById("link-type");
+      const linkEntitySelect = document.getElementById("link-entity");
+      const addLinkButton = document.getElementById("add-link");
+      const linkList = document.getElementById("link-list");
+      const sendButton = document.getElementById("send-message");
+      const sendStatus = document.getElementById("send-status");
+
+      function renderEntities() {
+        const type = linkTypeSelect.value;
+        linkEntitySelect.innerHTML = "";
+        const items = state.linkables[type] || [];
+        if (!items.length) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "Нет доступных сущностей";
+          linkEntitySelect.appendChild(option);
+          return;
+        }
+        items.forEach((item) => {
+          const option = document.createElement("option");
+          option.value = item.id;
+          option.textContent = item.label;
+          linkEntitySelect.appendChild(option);
+        });
+      }
+
+      function renderSelectedLinks() {
+        linkList.innerHTML = "";
+        state.selectedLinks.forEach((link, index) => {
+          const item = document.createElement("li");
+          item.textContent = `${link.label} (${link.type})`;
+          const removeButton = document.createElement("button");
+          removeButton.type = "button";
+          removeButton.textContent = "Удалить";
+          removeButton.addEventListener("click", () => {
+            state.selectedLinks.splice(index, 1);
+            renderSelectedLinks();
+          });
+          item.appendChild(removeButton);
+          linkList.appendChild(item);
+        });
+      }
+
+      loadButton.addEventListener("click", async () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+          loadStatus.textContent = "Нужно указать player token.";
+          return;
+        }
+        loadStatus.textContent = "Загрузка...";
+        try {
+          const response = await fetch("/api/player/linkables", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!response.ok) {
+            throw new Error("Не удалось получить данные кампании");
+          }
+          const data = await response.json();
+          state.linkables = {
+            npc: data.npcs || [],
+            quest: data.quests || [],
+            item: data.items || [],
+          };
+          renderEntities();
+          loadStatus.textContent = "Данные кампании загружены.";
+        } catch (error) {
+          loadStatus.textContent = error.message;
+        }
+      });
+
+      linkTypeSelect.addEventListener("change", renderEntities);
+
+      addLinkButton.addEventListener("click", () => {
+        const type = linkTypeSelect.value;
+        const id = linkEntitySelect.value;
+        const items = state.linkables[type] || [];
+        const selected = items.find((item) => item.id === id);
+        if (!selected) {
+          return;
+        }
+        if (state.selectedLinks.some((link) => link.type === selected.type && link.id === selected.id)) {
+          return;
+        }
+        state.selectedLinks.push({ ...selected });
+        renderSelectedLinks();
+      });
+
+      sendButton.addEventListener("click", async () => {
+        const token = tokenInput.value.trim();
+        const chatId = document.getElementById("chat-id").value.trim();
+        const text = document.getElementById("message-text").value.trim();
+        if (!token || !chatId || !text) {
+          sendStatus.textContent = "Заполните token, chat id и текст.";
+          return;
+        }
+        sendStatus.textContent = "Отправка...";
+        try {
+          const response = await fetch(`/api/player/chats/${chatId}/messages`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              text,
+              links: state.selectedLinks,
+            }),
+          });
+          if (!response.ok) {
+            throw new Error("Не удалось отправить сообщение");
+          }
+          sendStatus.textContent = "Сообщение отправлено.";
+          document.getElementById("message-text").value = "";
+          state.selectedLinks = [];
+          renderSelectedLinks();
+        } catch (error) {
+          sendStatus.textContent = error.message;
+        }
+      });
+
+      renderEntities();
+    </script>
+  </body>
+</html>

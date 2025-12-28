@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aether Journal · Player</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="page__header">
+        <div>
+          <h1>Player</h1>
+          <p class="muted">Заявки в друзья и чаты</p>
+        </div>
+        <div class="status" id="status">Нет соединения</div>
+      </header>
+
+      <section class="panel">
+        <h2>Подключение</h2>
+        <div class="form-row">
+          <label for="token-input">Токен игрока</label>
+          <input id="token-input" type="text" placeholder="Введите токен" />
+        </div>
+        <div class="form-actions">
+          <button id="connect-btn" type="button">Подключиться</button>
+          <button id="refresh-btn" type="button" class="ghost">Обновить</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2>Входящие заявки</h2>
+          <div class="meta">
+            <span id="contacts-count">Контакты: 0</span>
+            <span id="chats-count">Чаты: 0</span>
+          </div>
+        </div>
+        <div id="requests-list" class="requests"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
