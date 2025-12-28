@@ -59,6 +59,21 @@ class FreezeRequest(BaseModel):
     frozen: bool
 
 
+class ContactRequest(BaseModel):
+    display_name: str
+    link_payload: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FriendRequestPayload(BaseModel):
+    contact_id: str
+
+
+class ChatMessageRequest(BaseModel):
+    text: str
+    links: List[Dict[str, Any]] = Field(default_factory=list)
+    sender_contact_id: Optional[str] = None
+
+
 class ImportRequest(BaseModel):
     snapshot: Dict[str, Any]
     events: List[Dict[str, Any]] = Field(default_factory=list)
@@ -272,6 +287,81 @@ async def freeze_player(
 ) -> Dict[str, Any]:
     return await _apply_service(
         context, lambda: context.service.freeze_player(payload.frozen, actor_role=HOST_ROLE)
+    )
+
+
+@router.post("/host/contacts", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def add_chat_contact(
+    payload: ContactRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.add_chat_contact(
+            display_name=payload.display_name,
+            link_payload=payload.link_payload,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post("/host/friend-requests", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def send_friend_request(
+    payload: FriendRequestPayload, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.send_friend_request(
+            contact_id=payload.contact_id, actor_role=HOST_ROLE
+        ),
+    )
+
+
+@router.post(
+    "/player/friend-requests/{request_id}/accept",
+    dependencies=[Depends(require_token_role(PLAYER_ROLE))],
+)
+async def accept_friend_request(
+    request_id: str, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.accept_friend_request(
+            request_id=request_id, actor_role=PLAYER_ROLE
+        ),
+    )
+
+
+@router.post("/host/chats/{chat_id}/messages", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def send_host_chat_message(
+    chat_id: str, payload: ChatMessageRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.send_chat_message(
+            chat_id=chat_id,
+            text=payload.text,
+            links=payload.links,
+            sender_contact_id=payload.sender_contact_id,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post(
+    "/player/chats/{chat_id}/messages",
+    dependencies=[Depends(require_token_role(PLAYER_ROLE))],
+)
+async def send_player_chat_message(
+    chat_id: str, payload: ChatMessageRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.send_chat_message(
+            chat_id=chat_id,
+            text=payload.text,
+            links=payload.links,
+            actor_role=PLAYER_ROLE,
+        ),
     )
 
 
