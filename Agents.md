@@ -1,5 +1,9 @@
 Отвечать пользователю стоит на русском. 
 
+## Прогресс агента
+- Текущий этап: 0) Подготовка — завершено.
+- Пометка: нужно отмечать прогресс в этом файле и подписывать, что это нужно делать. — агент
+
 # Agents.md
 
 This repository is a **LAN (local network) Host + Player** LitRPG companion app.
@@ -188,4 +192,3 @@ Most state changes must emit auto-log events (and appear in log/history UI):
 - no lost events/messages on reconnect
 - safe defaults + configurable rules from Host UI
 - strong separation domain/app/storage/transport
-
