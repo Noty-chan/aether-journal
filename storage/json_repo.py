@@ -68,6 +68,24 @@ class JsonCampaignRepository:
         events = [EventLogEntry.from_dict(e) for e in data.get("events", [])]
         return [event for event in events if event.seq > after_seq]
 
+    def get_last_seq(self) -> int:
+        data = self._read_data()
+        return int(data.get("last_seq", 0))
+
+    def export_data(self) -> Dict[str, Any]:
+        return self._read_data()
+
+    def import_data(self, data: Dict[str, Any]) -> None:
+        if "snapshot" not in data:
+            raise ValueError("Missing snapshot")
+        if "events" not in data:
+            data["events"] = []
+        if "last_seq" not in data:
+            data["last_seq"] = 0
+        if "schema_version" not in data:
+            data["schema_version"] = SCHEMA_VERSION
+        self._write_data(data)
+
     def _read_data(self) -> Dict[str, Any]:
         if not self.path.exists():
             state = create_default_campaign_state()
