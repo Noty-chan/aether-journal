@@ -1,4 +1,7 @@
 \
+
+Отвечать пользователю стоит на русском. 
+
 # Agents.md
 
 This repository is a **LAN (local network) Host + Player** LitRPG companion app.
