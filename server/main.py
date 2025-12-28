@@ -12,6 +12,7 @@ from storage.json_repo import JsonCampaignRepository
 
 from .api import ApiContext, router
 from .auth import PairingManager
+from .ui import router as ui_router
 from .ws import WebSocketHub
 
 
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.state.context = ApiContext(service=service, pairing=pairing, hub=hub, repo=repo)
 
     app.include_router(router)
+    app.include_router(ui_router)
 
     base_dir = Path(__file__).resolve().parent.parent
     player_ui = base_dir / "static" / "player"
