@@ -3,6 +3,8 @@
 from .models import (
     Ability,
     AbilityCategory,
+    CampaignSettings,
+    CampaignState,
     Character,
     ChatContact,
     ChatMessage,
@@ -41,6 +43,8 @@ from .services import (
 __all__ = [
     "Ability",
     "AbilityCategory",
+    "CampaignSettings",
+    "CampaignState",
     "Character",
     "ChatContact",
     "ChatMessage",
