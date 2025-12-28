@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,7 @@ from storage.json_repo import JsonCampaignRepository
 
 from .api import ApiContext, router
 from .auth import PairingManager
+from .ui import router as ui_router
 from .ws import WebSocketHub
 
 
@@ -38,6 +40,13 @@ def create_app() -> FastAPI:
     app.mount(
         "/player", StaticFiles(directory="server/static/player", html=True), name="player"
     )
+    app.include_router(ui_router)
+
+    base_dir = Path(__file__).resolve().parent.parent
+    player_ui = base_dir / "static" / "player"
+    if player_ui.exists():
+        app.mount("/player", StaticFiles(directory=player_ui, html=True), name="player")
+
 
     @app.websocket("/ws")
     async def events_ws(websocket: WebSocket, token: str, after_seq: int = 0) -> None:
