@@ -391,6 +391,7 @@ class CampaignService:
                     "sender_contact_id": sender_id,
                     "text": text,
                     "links": [link for link in links or []],
+
                 },
             )
         ]
