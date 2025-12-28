@@ -15,6 +15,7 @@ from domain.models import (
     CampaignState,
     Character,
     ChatContact,
+    ChatLink,
     ChatMessage,
     ChatThread,
     ClassDefinition,
@@ -31,6 +32,8 @@ from domain.models import (
     QuestTemplate,
     Rarity,
     SystemMessage,
+    chat_link_from_dict,
+    chat_link_to_dict,
 )
 from domain.rules import ClassPerLevelBonus, StatPointRule, XPCurveExponential
 
@@ -517,7 +520,7 @@ def serialize_chat_message(message: ChatMessage) -> Dict[str, Any]:
         "sender_contact_id": message.sender_contact_id,
         "text": message.text,
         "created_at": message.created_at.isoformat(),
-        "links": message.links,
+        "links": [chat_link_to_dict(link) for link in message.links],
     }
 
 
@@ -530,7 +533,7 @@ def deserialize_chat_message(data: Dict[str, Any]) -> ChatMessage:
         created_at=datetime_from_iso(data.get("created_at"))
         if data.get("created_at")
         else utcnow(),
-        links=list(data.get("links", [])),
+        links=[chat_link_from_dict(link) for link in data.get("links", [])],
     )
 
 

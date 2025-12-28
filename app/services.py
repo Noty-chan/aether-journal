@@ -20,6 +20,7 @@ from domain.models import (
     QuestInstance,
     QuestStatus,
     SystemMessage,
+    chat_link_from_dict,
 )
 from domain.services import (
     choose_message_option,
@@ -375,7 +376,7 @@ class CampaignService:
             sender_contact_id=sender_id,
             text=text,
             created_at=utcnow(),
-            links=list(links or []),
+            links=[chat_link_from_dict(link) for link in links or []],
         )
         chat.messages.append(message)
         return [
@@ -389,7 +390,8 @@ class CampaignService:
                     "message_id": message.id,
                     "sender_contact_id": sender_id,
                     "text": text,
-                    "links": message.links,
+                    "links": [link for link in links or []],
+
                 },
             )
         ]

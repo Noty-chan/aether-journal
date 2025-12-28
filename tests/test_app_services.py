@@ -80,12 +80,16 @@ def test_host_chat_message_requires_contact():
     with pytest.raises(DomainError):
         service.send_chat_message(chat_id=chat_id, text="Hi", actor_role="host")
 
+    link_payload = {"kind": "npc", "title": "Старейшина", "summary": "Говорит о руинах"}
     events = service.send_chat_message(
         chat_id=chat_id,
         text="Hello",
+        links=[link_payload],
         sender_contact_id=contact_id,
         actor_role="host",
     )
 
     assert events[0].kind == "chat.message"
     assert state.chats[chat_id].messages[0].text == "Hello"
+    assert state.chats[chat_id].messages[0].links[0].title == "Старейшина"
+    assert events[0].payload["links"] == [link_payload]
