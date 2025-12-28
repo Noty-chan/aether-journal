@@ -10,6 +10,7 @@ from storage.json_repo import JsonCampaignRepository
 
 from .api import ApiContext, router
 from .auth import PairingManager
+from .ui import router as ui_router
 from .ws import WebSocketHub
 
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.state.context = ApiContext(service=service, pairing=pairing, hub=hub, repo=repo)
 
     app.include_router(router)
+    app.include_router(ui_router)
 
     @app.websocket("/ws")
     async def events_ws(websocket: WebSocket, token: str, after_seq: int = 0) -> None:
