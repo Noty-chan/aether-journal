@@ -4,6 +4,7 @@ import os
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.services import CampaignService
 from storage.json_repo import JsonCampaignRepository
@@ -33,6 +34,10 @@ def create_app() -> FastAPI:
     app.state.context = ApiContext(service=service, pairing=pairing, hub=hub, repo=repo)
 
     app.include_router(router)
+    app.mount("/host", StaticFiles(directory="server/static/host", html=True), name="host")
+    app.mount(
+        "/player", StaticFiles(directory="server/static/player", html=True), name="player"
+    )
 
     @app.websocket("/ws")
     async def events_ws(websocket: WebSocket, token: str, after_seq: int = 0) -> None:
