@@ -68,9 +68,15 @@ class FriendRequestPayload(BaseModel):
     contact_id: str
 
 
+class ChatLinkPayload(BaseModel):
+    type: str
+    id: str
+    label: Optional[str] = None
+
+
 class ChatMessageRequest(BaseModel):
     text: str
-    links: List[Dict[str, Any]] = Field(default_factory=list)
+    links: List[ChatLinkPayload] = Field(default_factory=list)
     sender_contact_id: Optional[str] = None
 
 
@@ -91,6 +97,59 @@ class ApiContext:
 
 def get_api_context(request: Request) -> ApiContext:
     return request.app.state.context
+
+
+def build_linkable_catalog(service: CampaignService) -> Dict[str, List[Dict[str, str]]]:
+    state = service.state
+    return {
+        "npcs": [
+            {"type": "npc", "id": contact.id, "label": contact.display_name}
+            for contact in state.contacts.values()
+        ],
+        "quests": [
+            {"type": "quest", "id": template.id, "label": template.name}
+            for template in state.quest_templates.values()
+        ],
+        "items": [
+            {"type": "item", "id": template.id, "label": template.name}
+            for template in state.item_templates.values()
+        ],
+    }
+
+
+def resolve_chat_links(
+    links: List[ChatLinkPayload], service: CampaignService
+) -> List[Dict[str, str]]:
+    state = service.state
+    resolved: List[Dict[str, str]] = []
+    for link in links:
+        if link.type == "npc":
+            contact = state.contacts.get(link.id)
+            if not contact:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="NPC not found"
+                )
+            label = contact.display_name
+        elif link.type == "quest":
+            quest = state.quest_templates.get(link.id)
+            if not quest:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Quest not found"
+                )
+            label = quest.name
+        elif link.type == "item":
+            item = state.item_templates.get(link.id)
+            if not item:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Item not found"
+                )
+            label = item.name
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported link type"
+            )
+        resolved.append({"type": link.type, "id": link.id, "label": label})
+    return resolved
 
 
 def require_token_role(role: str):
@@ -316,6 +375,11 @@ async def send_friend_request(
     )
 
 
+@router.get("/host/linkables", dependencies=[Depends(require_token_role(HOST_ROLE))])
+def list_host_linkables(context: ApiContext = Depends(get_api_context)) -> Dict[str, Any]:
+    return build_linkable_catalog(context.service)
+
+
 @router.post(
     "/player/friend-requests/{request_id}/accept",
     dependencies=[Depends(require_token_role(PLAYER_ROLE))],
@@ -331,6 +395,11 @@ async def accept_friend_request(
     )
 
 
+@router.get("/player/linkables", dependencies=[Depends(require_token_role(PLAYER_ROLE))])
+def list_player_linkables(context: ApiContext = Depends(get_api_context)) -> Dict[str, Any]:
+    return build_linkable_catalog(context.service)
+
+
 @router.post("/host/chats/{chat_id}/messages", dependencies=[Depends(require_token_role(HOST_ROLE))])
 async def send_host_chat_message(
     chat_id: str, payload: ChatMessageRequest, context: ApiContext = Depends(get_api_context)
@@ -340,7 +409,7 @@ async def send_host_chat_message(
         lambda: context.service.send_chat_message(
             chat_id=chat_id,
             text=payload.text,
-            links=payload.links,
+            links=resolve_chat_links(payload.links, context.service),
             sender_contact_id=payload.sender_contact_id,
             actor_role=HOST_ROLE,
         ),
@@ -359,7 +428,7 @@ async def send_player_chat_message(
         lambda: context.service.send_chat_message(
             chat_id=chat_id,
             text=payload.text,
-            links=payload.links,
+            links=resolve_chat_links(payload.links, context.service),
             actor_role=PLAYER_ROLE,
         ),
     )
