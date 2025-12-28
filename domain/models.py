@@ -147,6 +147,30 @@ class Character:
 
 
 @dataclass
+class CampaignSettings:
+    xp_curve: "XPCurveExponential" = field(default_factory=lambda: XPCurveExponential())
+    stat_rule: "StatPointRule" = field(default_factory=lambda: StatPointRule())
+    equipment_category_id: str = "equipment"
+
+
+@dataclass
+class CampaignState:
+    id: str
+    character: Character
+    classes: Dict[str, ClassDefinition] = field(default_factory=dict)
+    item_templates: Dict[str, ItemTemplate] = field(default_factory=dict)
+    quest_templates: Dict[str, QuestTemplate] = field(default_factory=dict)
+    ability_categories: Dict[str, AbilityCategory] = field(default_factory=dict)
+    abilities: Dict[str, Ability] = field(default_factory=dict)
+    active_quests: List[QuestInstance] = field(default_factory=list)
+    system_messages: List[SystemMessage] = field(default_factory=list)
+    chats: Dict[str, ChatThread] = field(default_factory=dict)
+    contacts: Dict[str, ChatContact] = field(default_factory=dict)
+    friend_requests: Dict[str, FriendRequest] = field(default_factory=dict)
+    settings: CampaignSettings = field(default_factory=CampaignSettings)
+
+
+@dataclass
 class Objective:
     id: str
     text: str
@@ -321,4 +345,4 @@ class ChatThread:
 
 
 from .helpers import utcnow  # noqa: E402
-from .rules import ClassPerLevelBonus  # noqa: E402
+from .rules import ClassPerLevelBonus, StatPointRule, XPCurveExponential  # noqa: E402
