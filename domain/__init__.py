@@ -7,6 +7,7 @@ from .models import (
     CampaignState,
     Character,
     ChatContact,
+    ChatLink,
     ChatMessage,
     ChatThread,
     ChoiceOption,
@@ -25,6 +26,8 @@ from .models import (
     QuestTemplate,
     Rarity,
     SystemMessage,
+    chat_link_from_dict,
+    chat_link_to_dict,
 )
 from .events import EventLogEntry
 from .errors import DomainError, EquipError, PermissionError, QuestError
@@ -47,6 +50,7 @@ __all__ = [
     "CampaignState",
     "Character",
     "ChatContact",
+    "ChatLink",
     "ChatMessage",
     "ChatThread",
     "ChoiceOption",
@@ -66,6 +70,8 @@ __all__ = [
     "QuestTemplate",
     "Rarity",
     "SystemMessage",
+    "chat_link_from_dict",
+    "chat_link_to_dict",
     "DomainError",
     "EquipError",
     "PermissionError",

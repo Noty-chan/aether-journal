@@ -333,7 +333,33 @@ class ChatMessage:
     sender_contact_id: str
     text: str
     created_at: datetime = field(default_factory=lambda: utcnow())
-    links: List[Dict[str, Any]] = field(default_factory=list)
+    links: List["ChatLink"] = field(default_factory=list)
+
+
+@dataclass
+class ChatLink:
+    kind: str
+    title: str
+    summary: str = ""
+    payload: Dict[str, Any] = field(default_factory=dict)
+
+
+def chat_link_to_dict(link: ChatLink) -> Dict[str, Any]:
+    return {
+        "kind": link.kind,
+        "title": link.title,
+        "summary": link.summary,
+        "payload": link.payload,
+    }
+
+
+def chat_link_from_dict(data: Dict[str, Any]) -> ChatLink:
+    return ChatLink(
+        kind=str(data.get("kind", "")),
+        title=str(data.get("title", "")),
+        summary=str(data.get("summary", "")),
+        payload=dict(data.get("payload", {})),
+    )
 
 
 @dataclass
