@@ -346,13 +346,16 @@ class ChatLink:
 
 
 def chat_link_to_dict(link: ChatLink) -> Dict[str, Any]:
-    return {
+    data: Dict[str, Any] = {
         "kind": link.kind,
-        "id": link.id,
         "title": link.title,
         "summary": link.summary,
-        "payload": link.payload,
     }
+    if link.id:
+        data["id"] = link.id
+    if link.payload:
+        data["payload"] = link.payload
+    return data
 
 
 def chat_link_from_dict(data: Dict[str, Any]) -> ChatLink:
