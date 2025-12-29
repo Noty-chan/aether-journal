@@ -22,6 +22,7 @@ from domain.models import (
     QuestStatus,
     SystemMessage,
     chat_link_from_dict,
+    chat_link_to_dict,
 )
 from domain.services import (
     choose_message_option,
@@ -519,13 +520,14 @@ class CampaignService:
             sender_id = sender_contact_id
         if actor_role == PLAYER_ROLE and not chat.opened:
             raise DomainError("Chat thread is not open yet")
+        normalized_links = [chat_link_from_dict(link) for link in links or []]
         message = ChatMessage(
             id=new_id("chatmsg"),
             chat_id=chat_id,
             sender_contact_id=sender_id,
             text=text,
             created_at=utcnow(),
-            links=[chat_link_from_dict(link) for link in links or []],
+            links=normalized_links,
         )
         chat.messages.append(message)
         return [
@@ -539,7 +541,7 @@ class CampaignService:
                     "message_id": message.id,
                     "sender_contact_id": sender_id,
                     "text": text,
-                    "links": [link for link in links or []],
+                    "links": [chat_link_to_dict(link) for link in normalized_links],
 
                 },
             )

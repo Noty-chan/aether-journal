@@ -11,7 +11,14 @@ from app.services import CampaignService
 from domain.errors import DomainError
 from domain.events import EventLogEntry
 from domain.helpers import new_id
-from domain.models import Ability, EquipmentSlot, MessageSeverity, QuestStatus
+from domain.models import (
+    Ability,
+    ChatLink,
+    EquipmentSlot,
+    MessageSeverity,
+    QuestStatus,
+    chat_link_to_dict,
+)
 from storage.json_repo import serialize_campaign_state
 
 from .auth import PairingManager
@@ -149,7 +156,7 @@ def build_linkable_catalog(service: CampaignService) -> Dict[str, List[Dict[str,
 
 def resolve_chat_links(
     links: List[ChatLinkPayload], service: CampaignService
-) -> List[Dict[str, str]]:
+) -> List[Dict[str, Any]]:
     state = service.state
     resolved: List[Dict[str, str]] = []
     for link in links:
@@ -178,7 +185,15 @@ def resolve_chat_links(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported link type"
             )
-        resolved.append({"type": link.type, "id": link.id, "label": label})
+        resolved.append(
+            chat_link_to_dict(
+                ChatLink(
+                    kind=link.type,
+                    id=link.id,
+                    title=label,
+                )
+            )
+        )
     return resolved
 
 
