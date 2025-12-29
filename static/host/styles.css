@@ -78,6 +78,11 @@ h3 {
   font-size: 14px;
 }
 
+.empty {
+  color: #9aa3b2;
+  font-size: 14px;
+}
+
 .form-row {
   display: flex;
   flex-direction: column;
@@ -423,6 +428,38 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.log-entry {
+  border: 1px solid #2a3142;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #111827;
+}
+
+.log-entry__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #9aa3b2;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.log-entry__kind {
+  font-weight: 600;
+  color: #cbd5f5;
+}
+
+.log-entry__details {
+  color: #e2e8f0;
+  font-size: 14px;
 }
 
 .quest-group,

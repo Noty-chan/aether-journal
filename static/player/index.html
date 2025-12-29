@@ -35,6 +35,7 @@
         <button class="tab" type="button" data-tab="messages">
           Системные сообщения
         </button>
+        <button class="tab" type="button" data-tab="log">Лог</button>
       </div>
 
       <section class="tab-panel" data-tab-panel="sheet">
@@ -143,6 +144,16 @@
             <span class="meta" id="messages-count">0</span>
           </div>
           <div class="messages" id="system-messages"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="log" hidden>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Лог событий</h2>
+            <span class="meta" id="log-count">0</span>
+          </div>
+          <div class="log-list" id="event-log"></div>
         </section>
       </section>
     </main>
