@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Aether Journal · Player</title>
+    <title>Aether Journal · Host</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="page">
       <header class="page__header">
         <div>
-          <h1>Player</h1>
-          <p class="muted">Лист персонажа и доступные действия</p>
+          <h1>Host</h1>
+          <p class="muted">Лист персонажа, инвентарь и экипировка</p>
         </div>
         <div class="status" id="status">Нет соединения</div>
       </header>
@@ -19,7 +19,7 @@
       <section class="panel">
         <h2>Подключение</h2>
         <div class="form-row">
-          <label for="token-input">Токен игрока</label>
+          <label for="token-input">Токен хоста</label>
           <input id="token-input" type="text" placeholder="Введите токен" />
         </div>
         <div class="form-actions">
@@ -38,6 +38,9 @@
             <div class="level">
               <div class="level__value" id="character-level">1</div>
               <div class="level__label">уровень</div>
+              <div class="level__indicator" id="level-indicator" hidden>
+                LEVEL UP
+              </div>
             </div>
           </div>
 
@@ -49,7 +52,19 @@
             <div class="xp__bar">
               <div class="xp__fill" id="xp-fill"></div>
             </div>
-            <div class="hint" id="freeze-status"></div>
+            <div class="xp__actions">
+              <div class="form-row inline">
+                <label for="xp-input">Добавить XP</label>
+                <input id="xp-input" type="number" min="1" placeholder="Напр. 50" />
+              </div>
+              <div class="button-row">
+                <button class="ghost" data-xp="10" type="button">+10</button>
+                <button class="ghost" data-xp="50" type="button">+50</button>
+                <button class="ghost" data-xp="100" type="button">+100</button>
+                <button id="xp-submit" type="button">Начислить</button>
+              </div>
+              <div class="hint" id="xp-status">Готово к начислению опыта.</div>
+            </div>
           </div>
 
           <div class="sheet__sections">
@@ -88,21 +103,10 @@
         <section class="panel equipment">
           <div class="panel__header">
             <h2>Экипировка</h2>
-            <span class="meta">Просмотр слотов персонажа</span>
+            <span class="meta">Слоты по правилам домена</span>
           </div>
           <div class="equipment__grid" id="equipment-grid"></div>
         </section>
-      </section>
-
-      <section class="panel">
-        <div class="panel__header">
-          <h2>Входящие заявки</h2>
-          <div class="meta">
-            <span id="contacts-count">Контакты: 0</span>
-            <span id="chats-count">Чаты: 0</span>
-          </div>
-        </div>
-        <div id="requests-list" class="requests"></div>
       </section>
     </main>
 
