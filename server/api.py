@@ -10,7 +10,8 @@ from app.permissions import HOST_ROLE, PLAYER_ROLE
 from app.services import CampaignService
 from domain.errors import DomainError
 from domain.events import EventLogEntry
-from domain.models import EquipmentSlot, MessageSeverity, QuestStatus
+from domain.helpers import new_id
+from domain.models import Ability, EquipmentSlot, MessageSeverity, QuestStatus
 from storage.json_repo import serialize_campaign_state
 
 from .auth import PairingManager
@@ -57,6 +58,35 @@ class ChoiceRequest(BaseModel):
 
 class FreezeRequest(BaseModel):
     frozen: bool
+
+
+class CurrencyUpdateRequest(BaseModel):
+    currency_id: str
+    value: int
+
+
+class ResourceUpdateRequest(BaseModel):
+    resource_id: str
+    current: int
+    maximum: int
+
+
+class ReputationUpdateRequest(BaseModel):
+    reputation_id: str
+    value: int
+
+
+class AbilityUpsertRequest(BaseModel):
+    id: Optional[str] = None
+    name: str
+    description: str = ""
+    category_id: str = ""
+    active: bool = True
+    hidden: bool = False
+    cooldown_s: Optional[int] = None
+    cost: Optional[str] = None
+    source: str = "manual"
+    scope: str = "character"
 
 
 class ContactRequest(BaseModel):
@@ -346,6 +376,92 @@ async def freeze_player(
 ) -> Dict[str, Any]:
     return await _apply_service(
         context, lambda: context.service.freeze_player(payload.frozen, actor_role=HOST_ROLE)
+    )
+
+
+@router.post("/host/currencies", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def update_currency(
+    payload: CurrencyUpdateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.update_currency(
+            currency_id=payload.currency_id,
+            value=payload.value,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post("/host/resources", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def update_resource(
+    payload: ResourceUpdateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.update_resource(
+            resource_id=payload.resource_id,
+            current=payload.current,
+            maximum=payload.maximum,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post("/host/reputations", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def update_reputation(
+    payload: ReputationUpdateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.update_reputation(
+            reputation_id=payload.reputation_id,
+            value=payload.value,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post("/host/abilities", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def upsert_ability(
+    payload: AbilityUpsertRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    ability = Ability(
+        id=payload.id or new_id("ability"),
+        name=payload.name,
+        description=payload.description,
+        category_id=payload.category_id,
+        active=payload.active,
+        hidden=payload.hidden,
+        cooldown_s=payload.cooldown_s,
+        cost=payload.cost,
+        source=payload.source,
+    )
+    return await _apply_service(
+        context,
+        lambda: context.service.upsert_ability(
+            ability=ability,
+            scope=payload.scope,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.delete(
+    "/host/abilities/{ability_id}", dependencies=[Depends(require_token_role(HOST_ROLE))]
+)
+async def remove_ability(
+    ability_id: str,
+    scope: str = "character",
+    context: ApiContext = Depends(get_api_context),
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.remove_ability(
+            ability_id=ability_id,
+            scope=scope,
+            actor_role=HOST_ROLE,
+        ),
     )
 
 
