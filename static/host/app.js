@@ -1,17 +1,17 @@
+const statusEl = document.getElementById("status");
 const tokenInput = document.getElementById("token-input");
 const connectBtn = document.getElementById("connect-btn");
 const refreshBtn = document.getElementById("refresh-btn");
-const statusEl = document.getElementById("status");
-const requestsList = document.getElementById("requests-list");
-const contactsCount = document.getElementById("contacts-count");
-const chatsCount = document.getElementById("chats-count");
 const characterNameEl = document.getElementById("character-name");
 const characterClassEl = document.getElementById("character-class");
 const characterLevelEl = document.getElementById("character-level");
+const levelIndicatorEl = document.getElementById("level-indicator");
 const xpCurrentEl = document.getElementById("xp-current");
 const xpNextEl = document.getElementById("xp-next");
 const xpFillEl = document.getElementById("xp-fill");
-const freezeStatusEl = document.getElementById("freeze-status");
+const xpInput = document.getElementById("xp-input");
+const xpSubmitBtn = document.getElementById("xp-submit");
+const xpStatusEl = document.getElementById("xp-status");
 const statsList = document.getElementById("stats-list");
 const resourcesList = document.getElementById("resources-list");
 const currenciesList = document.getElementById("currencies-list");
@@ -39,9 +39,6 @@ const ITEM_TYPE_SLOT_HINTS = {
 };
 
 const state = {
-  contacts: {},
-  chats: {},
-  friendRequests: {},
   token: "",
   snapshot: null,
   settings: null,
@@ -49,6 +46,7 @@ const state = {
   classes: {},
   templates: {},
   selectedItemId: null,
+  lastLevelUp: null,
   socket: null,
 };
 
@@ -60,8 +58,16 @@ function setStatus(message, variant = "") {
   }
 }
 
+function setXpStatus(message, variant = "") {
+  xpStatusEl.textContent = message;
+  xpStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    xpStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
 function saveToken(token) {
-  localStorage.setItem("playerToken", token);
+  localStorage.setItem("hostToken", token);
   state.token = token;
 }
 
@@ -111,6 +117,10 @@ function applyLevelUpEvent(payload) {
     const current = Number(state.character.stats?.[stat] ?? 0);
     state.character.stats[stat] = current + Number(delta);
   });
+  state.lastLevelUp = {
+    level: payload.new_level,
+    ts: payload.ts,
+  };
 }
 
 function applyInventoryAdded(payload) {
@@ -172,58 +182,13 @@ function applyEquipmentUnequipped(payload) {
   state.character.equipment[payload.slot] = null;
 }
 
-function ensureContact(contactId) {
-  if (!state.contacts[contactId]) {
-    state.contacts[contactId] = {
-      id: contactId,
-      display_name: "Неизвестный контакт",
-      link_payload: {},
-    };
-  }
-}
-
 function applyEvent(event) {
   switch (event.kind) {
-    case "chat.friend_request.sent": {
-      const { request_id, contact_id } = event.payload;
-      ensureContact(contact_id);
-      state.friendRequests[request_id] = {
-        id: request_id,
-        contact_id,
-        created_at: event.ts,
-        accepted: false,
-        accepted_at: null,
-      };
-      break;
-    }
-    case "chat.friend_request.accepted": {
-      const { request_id, contact_id, chat_id } = event.payload;
-      const request = state.friendRequests[request_id] || {
-        id: request_id,
-        contact_id,
-        created_at: event.ts,
-      };
-      request.accepted = true;
-      request.accepted_at = event.ts;
-      state.friendRequests[request_id] = request;
-      ensureContact(contact_id);
-      if (!state.chats[chat_id]) {
-        state.chats[chat_id] = {
-          id: chat_id,
-          contact_id,
-          opened: true,
-          messages: [],
-        };
-      } else {
-        state.chats[chat_id].opened = true;
-      }
-      break;
-    }
     case "xp.granted":
       applyXpGranted(Number(event.payload.amount ?? 0));
       break;
     case "level.up":
-      applyLevelUpEvent(event.payload);
+      applyLevelUpEvent({ ...event.payload, ts: event.ts });
       break;
     case "inventory.added":
       applyInventoryAdded(event.payload);
@@ -253,9 +218,6 @@ function applySnapshot(snapshot) {
   state.classes = snapshot.classes || {};
   state.templates = snapshot.item_templates || {};
   state.settings = snapshot.settings || null;
-  state.contacts = snapshot.contacts || {};
-  state.chats = snapshot.chats || {};
-  state.friendRequests = snapshot.friend_requests || {};
   if (!state.character?.equipment) {
     state.character.equipment = {};
   }
@@ -298,19 +260,17 @@ async function fetchSnapshot() {
     setStatus("Укажите токен", "error");
     return;
   }
-  setStatus("Подключение…");
+  setStatus("Подключение...");
   try {
     const response = await fetch("/api/snapshot", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) {
       throw new Error("Не удалось загрузить snapshot");
     }
     const payload = await response.json();
-    applySnapshot(payload.snapshot || {});
     saveToken(token);
+    applySnapshot(payload.snapshot || {});
     connectEventStream(token, payload.last_seq ?? 0);
   } catch (error) {
     setStatus(error.message, "error");
@@ -381,6 +341,12 @@ function renderSheet() {
     ? `Класс: ${classDef.name}`
     : "Класс —";
   characterLevelEl.textContent = state.character.level ?? 1;
+  if (state.lastLevelUp) {
+    levelIndicatorEl.hidden = false;
+    levelIndicatorEl.textContent = `LEVEL UP · ${state.lastLevelUp.level}`;
+  } else {
+    levelIndicatorEl.hidden = true;
+  }
   const xpToNext = computeXpToNext(
     state.character.level ?? 1,
     state.settings?.xp_curve,
@@ -393,11 +359,6 @@ function renderSheet() {
     xpFillEl.style.width = `${pct}%`;
   } else {
     xpFillEl.style.width = "0%";
-  }
-  if (state.character.frozen) {
-    freezeStatusEl.textContent = "Действия заблокированы хостом.";
-  } else {
-    freezeStatusEl.textContent = "";
   }
 
   const stats = Object.entries(state.character.stats || {}).map(([key, value]) => ({
@@ -466,6 +427,16 @@ function renderInventory() {
       ? `${template.item_type} · ${template.rarity}`
       : "тип неизвестен";
 
+    const equippedSlot = Object.entries(state.character.equipment || {}).find(
+      ([, itemId]) => itemId === item.id,
+    );
+    if (equippedSlot) {
+      const equipped = document.createElement("span");
+      equipped.className = "tag";
+      equipped.textContent = `Экипировано: ${equippedSlot[0]}`;
+      card.appendChild(equipped);
+    }
+
     card.appendChild(title);
     card.appendChild(subtitle);
     card.addEventListener("click", () => {
@@ -522,25 +493,14 @@ function renderItemCard() {
 
   const slots = getItemSlots(item);
   if (slots.length) {
-    const select = document.createElement("select");
     slots.forEach((slot) => {
-      const option = document.createElement("option");
-      option.value = slot;
-      option.textContent = slot;
-      select.appendChild(option);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `Экипировать: ${slot}`;
+      button.className = "ghost";
+      button.addEventListener("click", () => equipItem(item.id, slot, button));
+      actions.appendChild(button);
     });
-    actions.appendChild(select);
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "Запросить экипировку";
-    button.addEventListener("click", () =>
-      requestEquip(item.id, select.value, button),
-    );
-    if (state.character?.frozen) {
-      button.disabled = true;
-    }
-    actions.appendChild(button);
   } else {
     const note = document.createElement("div");
     note.className = "meta";
@@ -557,9 +517,17 @@ function renderItemCard() {
 function renderEquipment() {
   equipmentGrid.innerHTML = "";
   const equipment = state.character?.equipment || {};
+  const selectedItem = state.selectedItemId
+    ? state.character?.inventory?.[state.selectedItemId]
+    : null;
+  const selectedSlots = selectedItem ? getItemSlots(selectedItem) : [];
+
   EQUIPMENT_SLOTS.forEach(({ key, label }) => {
     const slotEl = document.createElement("div");
     slotEl.className = "slot";
+    if (selectedSlots.includes(key)) {
+      slotEl.classList.add("slot--highlight");
+    }
 
     const name = document.createElement("div");
     name.className = "slot__name";
@@ -583,54 +551,10 @@ function renderEquipment() {
 
     slotEl.appendChild(name);
     slotEl.appendChild(itemEl);
-    equipmentGrid.appendChild(slotEl);
-  });
-}
-
-function renderRequests() {
-  const requests = Object.values(state.friendRequests).filter((req) => !req.accepted);
-  contactsCount.textContent = `Контакты: ${Object.keys(state.contacts).length}`;
-  chatsCount.textContent = `Чаты: ${Object.keys(state.chats).length}`;
-
-  requestsList.innerHTML = "";
-  if (requests.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.textContent = "Пока нет новых заявок.";
-    requestsList.appendChild(empty);
-    return;
-  }
-
-  requests.forEach((request) => {
-    const contact = state.contacts[request.contact_id];
-    const card = document.createElement("div");
-    card.className = "request";
-
-    const meta = document.createElement("div");
-    meta.className = "request__meta";
-
-    const title = document.createElement("div");
-    title.className = "request__title";
-    title.textContent = contact ? contact.display_name : "Неизвестный контакт";
-
-    const subtitle = document.createElement("div");
-    subtitle.className = "request__subtitle";
-    subtitle.textContent = `ID заявки: ${request.id}`;
-
-    meta.appendChild(title);
-    meta.appendChild(subtitle);
-
-    const button = document.createElement("button");
-    button.textContent = "Принять";
-    button.addEventListener("click", () => acceptRequest(request.id, button));
-    if (state.character?.frozen) {
-      button.disabled = true;
+    if (selectedItem && selectedSlots.includes(key)) {
+      slotEl.addEventListener("click", () => equipItem(selectedItem.id, key, slotEl));
     }
-
-    card.appendChild(meta);
-    card.appendChild(button);
-
-    requestsList.appendChild(card);
+    equipmentGrid.appendChild(slotEl);
   });
 }
 
@@ -642,46 +566,20 @@ function render() {
   renderInventory();
   renderItemCard();
   renderEquipment();
-  renderRequests();
 }
 
-async function acceptRequest(requestId, button) {
+async function equipItem(itemId, slot, element) {
   const token = getToken();
   if (!token) {
     setStatus("Укажите токен", "error");
     return;
   }
-  button.disabled = true;
-  try {
-    const response = await fetch(`/api/player/friend-requests/${requestId}/accept`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(message || "Не удалось принять заявку");
-    }
-    const payload = await response.json();
-    applyEvents(payload.events || []);
-    setStatus("Заявка принята", "ok");
-  } catch (error) {
-    setStatus(error.message, "error");
-  } finally {
-    button.disabled = false;
+  if (element) {
+    element.disabled = true;
   }
-}
-
-async function requestEquip(itemId, slot, button) {
-  const token = getToken();
-  if (!token) {
-    setStatus("Укажите токен", "error");
-    return;
-  }
-  button.disabled = true;
+  setXpStatus("Экипировка предмета...");
   try {
-    const response = await fetch("/api/player/equip-request", {
+    const response = await fetch("/api/host/equip", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -691,28 +589,76 @@ async function requestEquip(itemId, slot, button) {
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw new Error(data.detail || "Не удалось отправить запрос");
+      throw new Error(data.detail || "Не удалось экипировать предмет");
     }
     const payload = await response.json();
     applyEvents(payload.events || []);
-    setStatus("Запрос отправлен", "ok");
+    setXpStatus("Предмет экипирован", "ok");
   } catch (error) {
-    setStatus(error.message, "error");
+    setXpStatus(error.message, "error");
   } finally {
-    button.disabled = false;
+    if (element) {
+      element.disabled = false;
+    }
+  }
+}
+
+async function grantXp(amount) {
+  const token = getToken();
+  if (!token) {
+    setStatus("Укажите токен", "error");
+    return;
+  }
+  if (!amount || amount <= 0) {
+    setXpStatus("Введите значение XP", "error");
+    return;
+  }
+  xpSubmitBtn.disabled = true;
+  try {
+    const response = await fetch("/api/host/grant-xp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ amount }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось начислить XP");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    xpInput.value = "";
+    setXpStatus("XP начислены", "ok");
+  } catch (error) {
+    setXpStatus(error.message, "error");
+  } finally {
+    xpSubmitBtn.disabled = false;
   }
 }
 
 connectBtn.addEventListener("click", fetchSnapshot);
 refreshBtn.addEventListener("click", fetchSnapshot);
 
-tokenInput.addEventListener("keydown", (event) => {
+xpSubmitBtn.addEventListener("click", () => {
+  grantXp(Number(xpInput.value));
+});
+
+xpInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
-    fetchSnapshot();
+    grantXp(Number(xpInput.value));
   }
 });
 
-const storedToken = localStorage.getItem("playerToken");
+document.querySelectorAll("[data-xp]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const amount = Number(button.dataset.xp);
+    grantXp(amount);
+  });
+});
+
+const storedToken = localStorage.getItem("hostToken");
 if (storedToken) {
   tokenInput.value = storedToken;
   state.token = storedToken;
