@@ -28,81 +28,122 @@
         </div>
       </section>
 
-      <section class="sheet-grid">
-        <section class="panel sheet" aria-live="polite">
-          <div class="sheet__header">
-            <div>
-              <h2 id="character-name">Персонаж</h2>
-              <div class="meta" id="character-class">Класс —</div>
-            </div>
-            <div class="level">
-              <div class="level__value" id="character-level">1</div>
-              <div class="level__label">уровень</div>
-            </div>
-          </div>
+      <div class="tabs" role="tablist">
+        <button class="tab active" type="button" data-tab="sheet">Персонаж</button>
+        <button class="tab" type="button" data-tab="quests">Квесты</button>
+        <button class="tab" type="button" data-tab="abilities">Способности</button>
+        <button class="tab" type="button" data-tab="messages">
+          Системные сообщения
+        </button>
+      </div>
 
-          <div class="xp">
-            <div class="xp__meta">
-              <span id="xp-current">XP: 0</span>
-              <span id="xp-next">До уровня: —</span>
+      <section class="tab-panel" data-tab-panel="sheet">
+        <section class="sheet-grid">
+          <section class="panel sheet" aria-live="polite">
+            <div class="sheet__header">
+              <div>
+                <h2 id="character-name">Персонаж</h2>
+                <div class="meta" id="character-class">Класс —</div>
+              </div>
+              <div class="level">
+                <div class="level__value" id="character-level">1</div>
+                <div class="level__label">уровень</div>
+              </div>
             </div>
-            <div class="xp__bar">
-              <div class="xp__fill" id="xp-fill"></div>
-            </div>
-            <div class="hint" id="freeze-status"></div>
-          </div>
 
-          <div class="sheet__sections">
-            <div class="sheet__section">
-              <h3>Статы</h3>
-              <div class="list" id="stats-list"></div>
+            <div class="xp">
+              <div class="xp__meta">
+                <span id="xp-current">XP: 0</span>
+                <span id="xp-next">До уровня: —</span>
+              </div>
+              <div class="xp__bar">
+                <div class="xp__fill" id="xp-fill"></div>
+              </div>
+              <div class="hint" id="freeze-status"></div>
             </div>
-            <div class="sheet__section">
-              <h3>Ресурсы</h3>
-              <div class="list" id="resources-list"></div>
+
+            <div class="sheet__sections">
+              <div class="sheet__section">
+                <h3>Статы</h3>
+                <div class="list" id="stats-list"></div>
+              </div>
+              <div class="sheet__section">
+                <h3>Ресурсы</h3>
+                <div class="list" id="resources-list"></div>
+              </div>
+              <div class="sheet__section">
+                <h3>Валюты</h3>
+                <div class="list" id="currencies-list"></div>
+              </div>
+              <div class="sheet__section">
+                <h3>Репутации</h3>
+                <div class="list" id="reputations-list"></div>
+              </div>
             </div>
-            <div class="sheet__section">
-              <h3>Валюты</h3>
-              <div class="list" id="currencies-list"></div>
+          </section>
+
+          <section class="panel inventory">
+            <div class="panel__header">
+              <h2>Инвентарь</h2>
+              <span class="meta" id="inventory-count">0 предметов</span>
             </div>
-            <div class="sheet__section">
-              <h3>Репутации</h3>
-              <div class="list" id="reputations-list"></div>
+            <div class="inventory__body">
+              <div class="inventory__list" id="inventory-list"></div>
+              <div class="item-card" id="item-card">
+                <div class="item-card__empty">Выберите предмет для деталей</div>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section class="panel equipment">
+            <div class="panel__header">
+              <h2>Экипировка</h2>
+              <span class="meta">Просмотр слотов персонажа</span>
+            </div>
+            <div class="equipment__grid" id="equipment-grid"></div>
+          </section>
         </section>
 
-        <section class="panel inventory">
+        <section class="panel">
           <div class="panel__header">
-            <h2>Инвентарь</h2>
-            <span class="meta" id="inventory-count">0 предметов</span>
-          </div>
-          <div class="inventory__body">
-            <div class="inventory__list" id="inventory-list"></div>
-            <div class="item-card" id="item-card">
-              <div class="item-card__empty">Выберите предмет для деталей</div>
+            <h2>Входящие заявки</h2>
+            <div class="meta">
+              <span id="contacts-count">Контакты: 0</span>
+              <span id="chats-count">Чаты: 0</span>
             </div>
           </div>
-        </section>
-
-        <section class="panel equipment">
-          <div class="panel__header">
-            <h2>Экипировка</h2>
-            <span class="meta">Просмотр слотов персонажа</span>
-          </div>
-          <div class="equipment__grid" id="equipment-grid"></div>
+          <div id="requests-list" class="requests"></div>
         </section>
       </section>
 
-      <section class="panel">
-        <div class="panel__header">
-          <h2>Входящие заявки</h2>
-          <div class="meta">
-            <span id="contacts-count">Контакты: 0</span>
-            <span id="chats-count">Чаты: 0</span>
+      <section class="tab-panel" data-tab-panel="quests" hidden>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Квесты</h2>
+            <span class="meta" id="quest-count">0</span>
           </div>
-        </div>
-        <div id="requests-list" class="requests"></div>
+          <div class="quest-groups" id="quest-status-groups"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="abilities" hidden>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Способности</h2>
+            <span class="meta" id="abilities-count">0</span>
+          </div>
+          <div class="ability-groups" id="abilities-groups"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="messages" hidden>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Системные сообщения</h2>
+            <span class="meta" id="messages-count">0</span>
+          </div>
+          <div class="messages" id="system-messages"></div>
+        </section>
       </section>
     </main>
 

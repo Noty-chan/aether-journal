@@ -180,6 +180,7 @@ class CampaignService:
                     "character_id": self.state.character.id,
                     "quest_id": quest.id,
                     "template_id": template_id,
+                    "quest": quest.to_dict(),
                 },
             )
         ]
@@ -205,6 +206,7 @@ class CampaignService:
                     "character_id": self.state.character.id,
                     "quest_id": quest.id,
                     "status": new_status.value,
+                    "quest": quest.to_dict(),
                 },
             )
         ]
@@ -250,6 +252,8 @@ class CampaignService:
                     "character_id": self.state.character.id,
                     "message_id": msg.id,
                     "option_id": option_id,
+                    "chosen_option_id": msg.chosen_option_id,
+                    "message": msg.to_dict(),
                 },
             )
         ]
@@ -446,6 +450,7 @@ class CampaignService:
                         "character_id": self.state.character.id,
                         "message_id": msg.id,
                         "title": msg.title,
+                        "message": msg.to_dict(),
                     },
                 )
             )
