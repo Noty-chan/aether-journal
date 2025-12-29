@@ -20,6 +20,12 @@ const inventoryList = document.getElementById("inventory-list");
 const inventoryCountEl = document.getElementById("inventory-count");
 const itemCard = document.getElementById("item-card");
 const equipmentGrid = document.getElementById("equipment-grid");
+const questStatusGroups = document.getElementById("quest-status-groups");
+const questCountEl = document.getElementById("quest-count");
+const abilitiesGroups = document.getElementById("abilities-groups");
+const abilitiesCountEl = document.getElementById("abilities-count");
+const messagesList = document.getElementById("system-messages");
+const messagesCountEl = document.getElementById("messages-count");
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -48,8 +54,16 @@ const state = {
   character: null,
   classes: {},
   templates: {},
+  questTemplates: {},
+  activeQuests: [],
+  abilityCategories: {},
+  abilities: {},
+  systemMessages: [],
   selectedItemId: null,
   socket: null,
+  messageCollapsed: {},
+  playedMessageIds: new Set(),
+  audioContext: null,
 };
 
 function setStatus(message, variant = "") {
@@ -58,6 +72,81 @@ function setStatus(message, variant = "") {
   if (variant) {
     statusEl.classList.add(`status--${variant}`);
   }
+}
+
+function setupTabs() {
+  const tabs = Array.from(document.querySelectorAll(".tab"));
+  const panels = Array.from(document.querySelectorAll(".tab-panel"));
+  const activate = (tabId) => {
+    tabs.forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.tab === tabId);
+    });
+    panels.forEach((panel) => {
+      panel.hidden = panel.dataset.tabPanel !== tabId;
+    });
+  };
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => activate(tab.dataset.tab));
+  });
+  activate("sheet");
+}
+
+function ensureAudioContext() {
+  if (!state.audioContext) {
+    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (state.audioContext.state === "suspended") {
+    state.audioContext.resume();
+  }
+}
+
+function playTone(frequency, duration = 0.25, type = "sine", gainValue = 0.04) {
+  if (!state.audioContext) {
+    return;
+  }
+  const ctx = state.audioContext;
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  oscillator.type = type;
+  oscillator.frequency.value = frequency;
+  gain.gain.value = gainValue;
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+  oscillator.start();
+  oscillator.stop(ctx.currentTime + duration);
+}
+
+function playLevelUpEffect() {
+  if (!state.audioContext) {
+    return;
+  }
+  const notes = [523.25, 659.25, 783.99, 1046.5];
+  notes.forEach((freq, index) => {
+    setTimeout(() => playTone(freq, 0.18, "triangle", 0.06), index * 140);
+  });
+}
+
+function playMessageSound(message) {
+  if (!message || state.playedMessageIds.has(message.id)) {
+    return;
+  }
+  ensureAudioContext();
+  if (!state.audioContext) {
+    return;
+  }
+  if (message.effect === "level_up") {
+    playLevelUpEffect();
+  } else {
+    const sound = message.sound || message.severity || "info";
+    if (sound === "alert") {
+      playTone(740, 0.25, "square", 0.05);
+    } else if (sound === "warning") {
+      playTone(520, 0.25, "sawtooth", 0.04);
+    } else {
+      playTone(440, 0.18, "sine", 0.03);
+    }
+  }
+  state.playedMessageIds.add(message.id);
 }
 
 function saveToken(token) {
@@ -172,6 +261,103 @@ function applyEquipmentUnequipped(payload) {
   state.character.equipment[payload.slot] = null;
 }
 
+function upsertQuest(quest) {
+  if (!quest) {
+    return;
+  }
+  const existing = state.activeQuests.find((item) => item.id === quest.id);
+  if (existing) {
+    Object.assign(existing, quest);
+  } else {
+    state.activeQuests.push(quest);
+  }
+}
+
+function applyQuestAssigned(payload) {
+  const quest =
+    payload.quest || {
+      id: payload.quest_id,
+      template_id: payload.template_id,
+      status: "active",
+      objectives: [],
+      started_at: new Date().toISOString(),
+      completed_at: null,
+    };
+  upsertQuest(quest);
+}
+
+function applyQuestStatus(payload) {
+  const quest =
+    payload.quest || {
+      id: payload.quest_id,
+      status: payload.status,
+    };
+  upsertQuest(quest);
+}
+
+function upsertSystemMessage(message) {
+  if (!message) {
+    return;
+  }
+  const existing = state.systemMessages.find((item) => item.id === message.id);
+  if (existing) {
+    Object.assign(existing, message);
+  } else {
+    state.systemMessages.push(message);
+  }
+}
+
+function applyMessageSent(payload) {
+  if (payload.message) {
+    upsertSystemMessage(payload.message);
+    playMessageSound(payload.message);
+  }
+}
+
+function applyMessageChoice(payload) {
+  if (payload.message) {
+    upsertSystemMessage(payload.message);
+  } else if (payload.message_id) {
+    const msg = state.systemMessages.find((item) => item.id === payload.message_id);
+    if (msg) {
+      msg.chosen_option_id = payload.chosen_option_id || payload.option_id || null;
+    }
+  }
+}
+
+function applyAbilityAdded(payload) {
+  if (!payload) {
+    return;
+  }
+  if (payload.ability) {
+    state.abilities[payload.ability.id] = payload.ability;
+    return;
+  }
+  if (payload.ability_id) {
+    state.abilities[payload.ability_id] = {
+      id: payload.ability_id,
+      name: payload.name || "Способность",
+      description: payload.description || "",
+      category_id: payload.category_id || "",
+      active: payload.active ?? true,
+      hidden: payload.hidden ?? false,
+      cooldown_s: payload.cooldown_s ?? null,
+      cost: payload.cost ?? null,
+      source: payload.source || "event",
+    };
+  }
+}
+
+function applyAbilityRemoved(payload) {
+  if (!payload) {
+    return;
+  }
+  const abilityId = payload.ability_id || payload.id;
+  if (abilityId) {
+    delete state.abilities[abilityId];
+  }
+}
+
 function ensureContact(contactId) {
   if (!state.contacts[contactId]) {
     state.contacts[contactId] = {
@@ -237,6 +423,25 @@ function applyEvent(event) {
     case "equipment.unequipped":
       applyEquipmentUnequipped(event.payload);
       break;
+    case "quest.assigned":
+      applyQuestAssigned(event.payload);
+      break;
+    case "quest.status":
+      applyQuestStatus(event.payload);
+      break;
+    case "message.sent":
+      applyMessageSent(event.payload);
+      break;
+    case "message.choice":
+      applyMessageChoice(event.payload);
+      break;
+    case "ability.added":
+    case "ability.updated":
+      applyAbilityAdded(event.payload);
+      break;
+    case "ability.removed":
+      applyAbilityRemoved(event.payload);
+      break;
     default:
       break;
   }
@@ -252,6 +457,11 @@ function applySnapshot(snapshot) {
   state.character = snapshot.character || null;
   state.classes = snapshot.classes || {};
   state.templates = snapshot.item_templates || {};
+  state.questTemplates = snapshot.quest_templates || {};
+  state.activeQuests = snapshot.active_quests || [];
+  state.abilityCategories = snapshot.ability_categories || {};
+  state.abilities = snapshot.abilities || {};
+  state.systemMessages = snapshot.system_messages || [];
   state.settings = snapshot.settings || null;
   state.contacts = snapshot.contacts || {};
   state.chats = snapshot.chats || {};
@@ -587,6 +797,286 @@ function renderEquipment() {
   });
 }
 
+function getQuestStatusLabel(status) {
+  const labels = {
+    active: "Активные",
+    completed: "Завершённые",
+    failed: "Проваленные",
+    hidden: "Скрытые",
+  };
+  return labels[status] || status;
+}
+
+function formatObjective(obj) {
+  if (!obj) {
+    return "";
+  }
+  if (obj.progress && obj.progress.length === 2) {
+    return `${obj.text} (${obj.progress[0]}/${obj.progress[1]})`;
+  }
+  return obj.text || "";
+}
+
+function renderQuestGroups() {
+  if (!questStatusGroups) {
+    return;
+  }
+  questStatusGroups.innerHTML = "";
+  const quests = state.activeQuests || [];
+  const grouped = quests.reduce((acc, quest) => {
+    const status = quest.status || "active";
+    if (!acc[status]) {
+      acc[status] = [];
+    }
+    acc[status].push(quest);
+    return acc;
+  }, {});
+  const statuses = ["active", "completed", "failed", "hidden"];
+  statuses.forEach((status) => {
+    const group = document.createElement("div");
+    group.className = "quest-group";
+    const title = document.createElement("div");
+    title.className = "quest-card__title";
+    title.textContent = getQuestStatusLabel(status);
+    group.appendChild(title);
+
+    const items = grouped[status] || [];
+    if (items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "meta";
+      empty.textContent = "Пусто";
+      group.appendChild(empty);
+    } else {
+      items.forEach((quest) => {
+        const template = state.questTemplates?.[quest.template_id];
+        const card = document.createElement("div");
+        card.className = "quest-card";
+
+        const header = document.createElement("div");
+        header.className = "quest-card__header";
+        const titleEl = document.createElement("div");
+        titleEl.className = "quest-card__title";
+        titleEl.textContent = template?.name || `Квест ${quest.id}`;
+        header.appendChild(titleEl);
+
+        const statusTag = document.createElement("span");
+        statusTag.className = "tag";
+        statusTag.textContent = getQuestStatusLabel(quest.status || "active");
+        header.appendChild(statusTag);
+
+        const meta = document.createElement("div");
+        meta.className = "quest-meta";
+        meta.textContent = template?.description || "Описание отсутствует.";
+
+        const objectives = document.createElement("div");
+        objectives.className = "quest-objectives";
+        (quest.objectives || []).forEach((obj) => {
+          const row = document.createElement("div");
+          row.className = "quest-objective";
+          if (obj.done) {
+            row.classList.add("done");
+          }
+          row.textContent = formatObjective(obj);
+          objectives.appendChild(row);
+        });
+
+        card.appendChild(header);
+        card.appendChild(meta);
+        if ((quest.objectives || []).length) {
+          card.appendChild(objectives);
+        }
+        group.appendChild(card);
+      });
+    }
+    questStatusGroups.appendChild(group);
+  });
+}
+
+function collectAbilities() {
+  return {
+    ...(state.abilities || {}),
+    ...(state.character?.abilities || {}),
+  };
+}
+
+function renderAbilities() {
+  if (!abilitiesGroups) {
+    return;
+  }
+  abilitiesGroups.innerHTML = "";
+  const abilities = Object.values(collectAbilities());
+  abilitiesCountEl.textContent = `${abilities.length}`;
+  if (abilities.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Нет доступных способностей.";
+    abilitiesGroups.appendChild(empty);
+    return;
+  }
+  const grouped = abilities.reduce((acc, ability) => {
+    const categoryId = ability.category_id || "uncategorized";
+    if (!acc[categoryId]) {
+      acc[categoryId] = [];
+    }
+    acc[categoryId].push(ability);
+    return acc;
+  }, {});
+  const categories = Object.keys(grouped).sort((a, b) => {
+    const nameA = state.abilityCategories?.[a]?.name || "Без категории";
+    const nameB = state.abilityCategories?.[b]?.name || "Без категории";
+    return nameA.localeCompare(nameB, "ru");
+  });
+  categories.forEach((categoryId) => {
+    const group = document.createElement("div");
+    group.className = "ability-group";
+    const title = document.createElement("div");
+    title.className = "quest-card__title";
+    title.textContent = state.abilityCategories?.[categoryId]?.name || "Без категории";
+    group.appendChild(title);
+
+    grouped[categoryId]
+      .sort((a, b) => a.name.localeCompare(b.name, "ru"))
+      .forEach((ability) => {
+        const card = document.createElement("div");
+        card.className = "ability-card";
+
+        const header = document.createElement("div");
+        header.className = "ability-card__header";
+        const name = document.createElement("div");
+        name.className = "ability-card__title";
+        name.textContent = ability.name || "Без названия";
+        header.appendChild(name);
+
+        const status = document.createElement("span");
+        status.className = "tag";
+        status.textContent = ability.active ? "Активна" : "Пассивна";
+        header.appendChild(status);
+
+        const meta = document.createElement("div");
+        meta.className = "ability-meta";
+        const info = [];
+        if (ability.cooldown_s) {
+          info.push(`КД: ${ability.cooldown_s}s`);
+        }
+        if (ability.cost) {
+          info.push(`Стоимость: ${ability.cost}`);
+        }
+        if (ability.source) {
+          info.push(`Источник: ${ability.source}`);
+        }
+        meta.textContent = info.join(" · ");
+
+        const description = document.createElement("div");
+        description.className = "message-card__body";
+        description.textContent = ability.description || "Описание отсутствует.";
+
+        card.appendChild(header);
+        if (meta.textContent) {
+          card.appendChild(meta);
+        }
+        card.appendChild(description);
+        group.appendChild(card);
+      });
+    abilitiesGroups.appendChild(group);
+  });
+}
+
+function isMessageCollapsed(message) {
+  if (!message.collapsible) {
+    return false;
+  }
+  if (message.choices?.length && message.chosen_option_id) {
+    return state.messageCollapsed[message.id] ?? true;
+  }
+  return state.messageCollapsed[message.id] ?? false;
+}
+
+function renderMessages() {
+  if (!messagesList) {
+    return;
+  }
+  messagesList.innerHTML = "";
+  const messages = [...(state.systemMessages || [])].sort((a, b) =>
+    (b.created_at || "").localeCompare(a.created_at || ""),
+  );
+  messagesCountEl.textContent = `${messages.length}`;
+  if (messages.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Сообщений пока нет.";
+    messagesList.appendChild(empty);
+    return;
+  }
+  messages.forEach((message) => {
+    const card = document.createElement("div");
+    card.className = `message-card message-card--${message.severity || "info"}`;
+
+    const header = document.createElement("div");
+    header.className = "message-card__header";
+    const title = document.createElement("div");
+    title.className = "message-card__title";
+    title.textContent = message.title || "Сообщение";
+    header.appendChild(title);
+
+    const actions = document.createElement("div");
+    actions.className = "message-card__actions";
+    if (message.collapsible) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "ghost";
+      toggle.textContent = isMessageCollapsed(message) ? "Развернуть" : "Свернуть";
+      toggle.addEventListener("click", () => {
+        state.messageCollapsed[message.id] = !isMessageCollapsed(message);
+        renderMessages();
+      });
+      actions.appendChild(toggle);
+    }
+    header.appendChild(actions);
+
+    card.appendChild(header);
+
+    const summary = document.createElement("div");
+    summary.className = "message-card__summary";
+    const chosenOption = message.choices?.find(
+      (choice) => choice.id === message.chosen_option_id,
+    );
+    if (chosenOption) {
+      summary.textContent = `Выбрано: ${chosenOption.label}`;
+    }
+
+    const body = document.createElement("div");
+    body.className = "message-card__body";
+    body.textContent = message.body || "";
+
+    if (!isMessageCollapsed(message)) {
+      card.appendChild(body);
+      if (message.choices?.length) {
+        const choices = document.createElement("div");
+        choices.className = "message-card__choices";
+        message.choices.forEach((choice) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "ghost";
+          button.textContent = choice.label;
+          button.disabled = Boolean(message.chosen_option_id) || state.character?.frozen;
+          button.addEventListener("click", () =>
+            chooseMessageOption(message.id, choice.id, button),
+          );
+          choices.appendChild(button);
+        });
+        card.appendChild(choices);
+      }
+      if (summary.textContent) {
+        card.appendChild(summary);
+      }
+    } else if (summary.textContent) {
+      card.appendChild(summary);
+    }
+
+    messagesList.appendChild(card);
+  });
+}
+
 function renderRequests() {
   const requests = Object.values(state.friendRequests).filter((req) => !req.accepted);
   contactsCount.textContent = `Контакты: ${Object.keys(state.contacts).length}`;
@@ -643,6 +1133,12 @@ function render() {
   renderItemCard();
   renderEquipment();
   renderRequests();
+  renderQuestGroups();
+  renderAbilities();
+  renderMessages();
+  if (questCountEl) {
+    questCountEl.textContent = `${state.activeQuests?.length || 0}`;
+  }
 }
 
 async function acceptRequest(requestId, button) {
@@ -670,6 +1166,40 @@ async function acceptRequest(requestId, button) {
     setStatus(error.message, "error");
   } finally {
     button.disabled = false;
+  }
+}
+
+async function chooseMessageOption(messageId, optionId, button) {
+  const token = getToken();
+  if (!token) {
+    setStatus("Укажите токен", "error");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+  }
+  try {
+    const response = await fetch(`/api/player/messages/${messageId}/choice`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ option_id: optionId }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось отправить выбор");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setStatus("Выбор принят", "ok");
+  } catch (error) {
+    setStatus(error.message, "error");
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
   }
 }
 
@@ -718,4 +1248,13 @@ if (storedToken) {
   state.token = storedToken;
 }
 
+document.addEventListener(
+  "click",
+  () => {
+    ensureAudioContext();
+  },
+  { once: true },
+);
+
+setupTabs();
 render();

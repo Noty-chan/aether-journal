@@ -96,11 +96,13 @@ h3 {
 }
 
 input,
-button {
+button,
+select {
   font: inherit;
 }
 
-input {
+input,
+select {
   background: #0f131c;
   border: 1px solid #2a3142;
   border-radius: 10px;
@@ -132,6 +134,31 @@ button:disabled {
   display: flex;
   gap: 12px;
   margin-top: 12px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tab {
+  background: #1f2534;
+  color: #cbd5f5;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 600;
+}
+
+.tab.active {
+  background: #4b74ff;
+  color: #fff;
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .sheet-grid {
@@ -378,6 +405,118 @@ button:disabled {
   border-color: #38bdf8;
 }
 
+.quest-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 20px;
+}
+
+.quest-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quest-groups,
+.ability-groups,
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quest-group,
+.ability-group {
+  background: #121622;
+  border: 1px solid #262c3d;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quest-card,
+.ability-card,
+.message-card {
+  background: #0f131c;
+  border: 1px solid #2a3142;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quest-card__header,
+.ability-card__header,
+.message-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.quest-card__title,
+.ability-card__title,
+.message-card__title {
+  font-weight: 600;
+}
+
+.quest-objectives {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #cbd5f5;
+}
+
+.quest-objective.done {
+  color: #9aa3b2;
+  text-decoration: line-through;
+}
+
+.message-card--info {
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
+.message-card--warning {
+  border-color: rgba(251, 146, 60, 0.6);
+}
+
+.message-card--alert {
+  border-color: rgba(248, 113, 113, 0.6);
+}
+
+.message-card__body {
+  color: #dbe3f2;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.message-card__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.message-card__summary {
+  color: #9aa3b2;
+  font-size: 13px;
+}
+
+.message-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ability-meta,
+.quest-meta {
+  font-size: 13px;
+  color: #9aa3b2;
+}
+
 @media (max-width: 1100px) {
   .sheet-grid {
     grid-template-columns: 1fr;
@@ -388,6 +527,10 @@ button:disabled {
   }
 
   .inventory__body {
+    grid-template-columns: 1fr;
+  }
+
+  .quest-grid {
     grid-template-columns: 1fr;
   }
 }
