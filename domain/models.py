@@ -339,6 +339,7 @@ class ChatMessage:
 @dataclass
 class ChatLink:
     kind: str
+    id: str
     title: str
     summary: str = ""
     payload: Dict[str, Any] = field(default_factory=dict)
@@ -347,6 +348,7 @@ class ChatLink:
 def chat_link_to_dict(link: ChatLink) -> Dict[str, Any]:
     return {
         "kind": link.kind,
+        "id": link.id,
         "title": link.title,
         "summary": link.summary,
         "payload": link.payload,
@@ -354,11 +356,21 @@ def chat_link_to_dict(link: ChatLink) -> Dict[str, Any]:
 
 
 def chat_link_from_dict(data: Dict[str, Any]) -> ChatLink:
+    if "type" in data or "label" in data:
+        return ChatLink(
+            kind=str(data.get("type", "")),
+            id=str(data.get("id", "")),
+            title=str(data.get("label", "")),
+            summary=str(data.get("summary", "")),
+            payload=dict(data.get("payload", {})),
+        )
+    payload = dict(data.get("payload", {}))
     return ChatLink(
         kind=str(data.get("kind", "")),
+        id=str(data.get("id") or payload.get("id", "")),
         title=str(data.get("title", "")),
         summary=str(data.get("summary", "")),
-        payload=dict(data.get("payload", {})),
+        payload=payload,
     )
 
 
