@@ -36,14 +36,18 @@ def create_app() -> FastAPI:
     app.state.context = ApiContext(service=service, pairing=pairing, hub=hub, repo=repo)
 
     app.include_router(router)
-    app.mount("/host", StaticFiles(directory="server/static/host", html=True), name="host")
-    app.mount(
-        "/player", StaticFiles(directory="server/static/player", html=True), name="player"
-    )
     app.include_router(ui_router)
 
     base_dir = Path(__file__).resolve().parent.parent
+    server_dir = Path(__file__).resolve().parent
+    host_ui = base_dir / "static" / "host"
     player_ui = base_dir / "static" / "player"
+    fallback_host_ui = server_dir / "static" / "host"
+    fallback_player_ui = server_dir / "static" / "player"
+    host_ui = host_ui if host_ui.exists() else fallback_host_ui
+    player_ui = player_ui if player_ui.exists() else fallback_player_ui
+    if host_ui.exists():
+        app.mount("/host", StaticFiles(directory=host_ui, html=True), name="host")
     if player_ui.exists():
         app.mount("/player", StaticFiles(directory=player_ui, html=True), name="player")
 

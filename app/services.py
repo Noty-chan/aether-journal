@@ -91,9 +91,13 @@ class CampaignService:
         self, item_instance_id: str, actor_role: str = HOST_ROLE
     ) -> List[EventLogEntry]:
         ensure_host(actor_role)
+        before_slots = dict(self.state.character.equipment.slots)
         self._unequip_if_equipped(item_instance_id)
+        unequip_events = self._build_unequip_events(
+            before_slots, self.state.character.equipment.slots, actor_role
+        )
         self.state.character.inventory.remove(item_instance_id)
-        return [
+        return unequip_events + [
             EventLogEntry(
                 seq=0,
                 ts=utcnow(),
@@ -114,13 +118,18 @@ class CampaignService:
     ) -> List[EventLogEntry]:
         ensure_host(actor_role)
         class_def = self._get_class_def()
-        return equip_item_domain(
+        before_slots = dict(self.state.character.equipment.slots)
+        events = equip_item_domain(
             self.state.character,
             class_def,
             self.state.item_templates,
             item_instance_id,
             slot,
         )
+        unequip_events = self._build_unequip_events(
+            before_slots, self.state.character.equipment.slots, actor_role
+        )
+        return unequip_events + events
 
     def request_equip_item(
         self,
@@ -370,6 +379,8 @@ class CampaignService:
             if sender_contact_id != chat.contact_id:
                 raise DomainError("Sender does not match chat contact")
             sender_id = sender_contact_id
+        if actor_role == PLAYER_ROLE and not chat.opened:
+            raise DomainError("Chat thread is not open yet")
         message = ChatMessage(
             id=new_id("chatmsg"),
             chat_id=chat_id,
@@ -438,6 +449,31 @@ class CampaignService:
                     },
                 )
             )
+        return events
+
+    def _build_unequip_events(
+        self,
+        before_slots: dict[EquipmentSlot, Optional[str]],
+        after_slots: dict[EquipmentSlot, Optional[str]],
+        actor_role: str,
+    ) -> List[EventLogEntry]:
+        events: List[EventLogEntry] = []
+        for slot, before_id in before_slots.items():
+            after_id = after_slots.get(slot)
+            if before_id and before_id != after_id:
+                events.append(
+                    EventLogEntry(
+                        seq=0,
+                        ts=utcnow(),
+                        actor=actor_role,
+                        kind="equipment.unequipped",
+                        payload={
+                            "character_id": self.state.character.id,
+                            "item_instance_id": before_id,
+                            "slot": slot.value,
+                        },
+                    )
+                )
         return events
 
     def _get_or_create_chat_thread(self, contact_id: str) -> ChatThread:
