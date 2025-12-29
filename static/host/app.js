@@ -340,12 +340,21 @@ function applyAbilityAdded(payload) {
   if (!payload) {
     return;
   }
+  const target =
+    payload.scope === "library"
+      ? state.abilities
+      : payload.scope === "character" || payload.character_id
+        ? (state.character?.abilities ?? (state.character.abilities = {}))
+        : state.abilities;
+  if (!target) {
+    return;
+  }
   if (payload.ability) {
-    state.abilities[payload.ability.id] = payload.ability;
+    target[payload.ability.id] = payload.ability;
     return;
   }
   if (payload.ability_id) {
-    state.abilities[payload.ability_id] = {
+    target[payload.ability_id] = {
       id: payload.ability_id,
       name: payload.name || "Способность",
       description: payload.description || "",
@@ -363,10 +372,64 @@ function applyAbilityRemoved(payload) {
   if (!payload) {
     return;
   }
+  const target =
+    payload.scope === "library"
+      ? state.abilities
+      : payload.scope === "character" || payload.character_id
+        ? state.character?.abilities
+        : state.abilities;
+  if (!target) {
+    return;
+  }
   const abilityId = payload.ability_id || payload.id;
   if (abilityId) {
-    delete state.abilities[abilityId];
+    delete target[abilityId];
   }
+}
+
+function applyCurrencyUpdated(payload) {
+  if (!state.character || !payload) {
+    return;
+  }
+  if (!state.character.currencies) {
+    state.character.currencies = {};
+  }
+  if (payload.currency_id) {
+    state.character.currencies[payload.currency_id] = payload.new_value ?? payload.value ?? 0;
+  }
+}
+
+function applyResourceUpdated(payload) {
+  if (!state.character || !payload) {
+    return;
+  }
+  if (!state.character.resources) {
+    state.character.resources = {};
+  }
+  if (payload.resource_id) {
+    const current = payload.current ?? 0;
+    const max = payload.max ?? payload.maximum ?? 0;
+    state.character.resources[payload.resource_id] = [current, max];
+  }
+}
+
+function applyReputationUpdated(payload) {
+  if (!state.character || !payload) {
+    return;
+  }
+  if (!state.character.reputations) {
+    state.character.reputations = {};
+  }
+  if (payload.reputation_id) {
+    state.character.reputations[payload.reputation_id] = payload.new_value ?? payload.value ?? 0;
+  }
+}
+
+function applyFreeze(payload) {
+  if (!state.character || !payload) {
+    return;
+  }
+  state.character.frozen = Boolean(payload.frozen);
 }
 
 function applyEvent(event) {
@@ -400,6 +463,18 @@ function applyEvent(event) {
       break;
     case "message.choice":
       applyMessageChoice(event.payload);
+      break;
+    case "player.freeze":
+      applyFreeze(event.payload);
+      break;
+    case "currency.updated":
+      applyCurrencyUpdated(event.payload);
+      break;
+    case "resource.updated":
+      applyResourceUpdated(event.payload);
+      break;
+    case "reputation.updated":
+      applyReputationUpdated(event.payload);
       break;
     case "ability.added":
     case "ability.updated":

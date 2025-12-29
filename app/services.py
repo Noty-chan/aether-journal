@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from domain.errors import DomainError, QuestError
-from domain.events import EventLogEntry
+from domain.events import EventKind, EventLogEntry
 from domain.helpers import new_id, utcnow
 from domain.models import (
     CampaignState,
+    Ability,
     ChatContact,
     ChatMessage,
     ChatThread,
@@ -77,7 +78,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="inventory.added",
+                kind=EventKind.inventory_added.value,
                 payload={
                     "character_id": self.state.character.id,
                     "item_instance_id": inst.id,
@@ -102,7 +103,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="inventory.removed",
+                kind=EventKind.inventory_removed.value,
                 payload={
                     "character_id": self.state.character.id,
                     "item_instance_id": item_instance_id,
@@ -144,7 +145,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="equipment.requested",
+                kind=EventKind.equipment_requested.value,
                 payload={
                     "character_id": self.state.character.id,
                     "item_instance_id": item_instance_id,
@@ -175,7 +176,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="quest.assigned",
+                kind=EventKind.quest_assigned.value,
                 payload={
                     "character_id": self.state.character.id,
                     "quest_id": quest.id,
@@ -201,7 +202,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="quest.status",
+                kind=EventKind.quest_status.value,
                 payload={
                     "character_id": self.state.character.id,
                     "quest_id": quest.id,
@@ -247,7 +248,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="message.choice",
+                kind=EventKind.message_choice.value,
                 payload={
                     "character_id": self.state.character.id,
                     "message_id": msg.id,
@@ -266,10 +267,131 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="player.freeze",
+                kind=EventKind.player_frozen.value,
                 payload={
                     "character_id": self.state.character.id,
                     "frozen": frozen,
+                },
+            )
+        ]
+
+    def update_currency(
+        self, currency_id: str, value: int, actor_role: str = HOST_ROLE
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        old_value = int(self.state.character.currencies.get(currency_id, 0))
+        self.state.character.currencies[currency_id] = int(value)
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.currency_updated.value,
+                payload={
+                    "character_id": self.state.character.id,
+                    "currency_id": currency_id,
+                    "old_value": old_value,
+                    "new_value": int(value),
+                    "delta": int(value) - old_value,
+                },
+            )
+        ]
+
+    def update_resource(
+        self,
+        resource_id: str,
+        current: int,
+        maximum: int,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        old_current, old_max = self.state.character.resources.get(resource_id, (0, 0))
+        self.state.character.resources[resource_id] = (int(current), int(maximum))
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.resource_updated.value,
+                payload={
+                    "character_id": self.state.character.id,
+                    "resource_id": resource_id,
+                    "old_current": int(old_current),
+                    "old_max": int(old_max),
+                    "current": int(current),
+                    "max": int(maximum),
+                    "delta": int(current) - int(old_current),
+                },
+            )
+        ]
+
+    def update_reputation(
+        self, reputation_id: str, value: int, actor_role: str = HOST_ROLE
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        old_value = int(self.state.character.reputations.get(reputation_id, 0))
+        self.state.character.reputations[reputation_id] = int(value)
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.reputation_updated.value,
+                payload={
+                    "character_id": self.state.character.id,
+                    "reputation_id": reputation_id,
+                    "old_value": old_value,
+                    "new_value": int(value),
+                    "delta": int(value) - old_value,
+                },
+            )
+        ]
+
+    def upsert_ability(
+        self,
+        ability: Ability,
+        scope: str = "character",
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        target = self._get_ability_target(scope)
+        kind = (
+            EventKind.ability_updated.value
+            if ability.id in target
+            else EventKind.ability_added.value
+        )
+        target[ability.id] = ability
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=kind,
+                payload={
+                    "character_id": self.state.character.id,
+                    "scope": scope,
+                    "ability_id": ability.id,
+                    "ability": self._serialize_ability(ability),
+                },
+            )
+        ]
+
+    def remove_ability(
+        self, ability_id: str, scope: str = "character", actor_role: str = HOST_ROLE
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        target = self._get_ability_target(scope)
+        target.pop(ability_id, None)
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.ability_removed.value,
+                payload={
+                    "character_id": self.state.character.id,
+                    "scope": scope,
+                    "ability_id": ability_id,
                 },
             )
         ]
@@ -292,7 +414,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="chat.contact.added",
+                kind=EventKind.chat_contact_added.value,
                 payload={
                     "contact_id": contact.id,
                     "display_name": contact.display_name,
@@ -319,7 +441,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="chat.friend_request.sent",
+                kind=EventKind.chat_friend_request_sent.value,
                 payload={
                     "request_id": request.id,
                     "contact_id": contact_id,
@@ -348,7 +470,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="chat.friend_request.accepted",
+                kind=EventKind.chat_friend_request_accepted.value,
                 payload={
                     "request_id": request.id,
                     "contact_id": request.contact_id,
@@ -399,7 +521,7 @@ class CampaignService:
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
-                kind="chat.message",
+                kind=EventKind.chat_message.value,
                 payload={
                     "chat_id": chat_id,
                     "message_id": message.id,
@@ -445,7 +567,7 @@ class CampaignService:
                     seq=0,
                     ts=utcnow(),
                     actor=actor_role,
-                    kind="message.sent",
+                    kind=EventKind.message_sent.value,
                     payload={
                         "character_id": self.state.character.id,
                         "message_id": msg.id,
@@ -471,7 +593,7 @@ class CampaignService:
                         seq=0,
                         ts=utcnow(),
                         actor=actor_role,
-                        kind="equipment.unequipped",
+                        kind=EventKind.equipment_unequipped.value,
                         payload={
                             "character_id": self.state.character.id,
                             "item_instance_id": before_id,
@@ -488,3 +610,26 @@ class CampaignService:
         chat = ChatThread(id=new_id("chat"), contact_id=contact_id, opened=False)
         self.state.chats[chat.id] = chat
         return chat
+
+    def _get_ability_target(self, scope: str) -> dict:
+        if scope == "library":
+            return self.state.abilities
+        if scope == "character":
+            if not self.state.character.abilities:
+                self.state.character.abilities = {}
+            return self.state.character.abilities
+        raise DomainError("Unknown ability scope")
+
+    @staticmethod
+    def _serialize_ability(ability: Ability) -> dict:
+        return {
+            "id": ability.id,
+            "name": ability.name,
+            "description": ability.description,
+            "category_id": ability.category_id,
+            "active": ability.active,
+            "hidden": ability.hidden,
+            "cooldown_s": ability.cooldown_s,
+            "cost": ability.cost,
+            "source": ability.source,
+        }

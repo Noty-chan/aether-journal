@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, List, Tuple
 
 from .errors import DomainError, EquipError, QuestError
-from .events import EventLogEntry
+from .events import EventKind, EventLogEntry
 from .helpers import new_id, utcnow
 from .models import (
     Ability,
@@ -60,7 +60,7 @@ def grant_xp_and_level(
             seq=0,
             ts=utcnow(),
             actor="system",
-            kind="xp.granted",
+            kind=EventKind.xp_granted.value,
             payload={
                 "character_id": character.id,
                 "amount": amount,
@@ -83,7 +83,7 @@ def grant_xp_and_level(
                     seq=0,
                     ts=utcnow(),
                     actor="system",
-                    kind="level.up",
+                    kind=EventKind.level_up.value,
                     payload={
                         "character_id": character.id,
                         "new_level": level,
@@ -167,7 +167,7 @@ def equip_item(
             seq=0,
             ts=utcnow(),
             actor="system",
-            kind="equipment.equipped",
+            kind=EventKind.equipment_equipped.value,
             payload={
                 "character_id": character.id,
                 "item_instance_id": inst.id,
