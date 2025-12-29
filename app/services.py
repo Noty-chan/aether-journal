@@ -431,6 +431,18 @@ class CampaignService:
         ensure_host(actor_role)
         if contact_id not in self.state.contacts:
             raise DomainError("Chat contact not found")
+        has_pending_request = any(
+            request.contact_id == contact_id and not request.accepted
+            for request in self.state.friend_requests.values()
+        )
+        if has_pending_request:
+            raise DomainError("Friend request already pending for this contact")
+        has_open_chat = any(
+            chat.contact_id == contact_id and chat.opened
+            for chat in self.state.chats.values()
+        )
+        if has_open_chat:
+            raise DomainError("Chat with this contact already opened")
         request = FriendRequest(
             id=new_id("req"),
             contact_id=contact_id,
