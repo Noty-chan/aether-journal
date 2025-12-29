@@ -26,6 +26,8 @@ const abilitiesGroups = document.getElementById("abilities-groups");
 const abilitiesCountEl = document.getElementById("abilities-count");
 const messagesList = document.getElementById("system-messages");
 const messagesCountEl = document.getElementById("messages-count");
+const logList = document.getElementById("event-log");
+const logCountEl = document.getElementById("log-count");
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -64,6 +66,8 @@ const state = {
   messageCollapsed: {},
   playedMessageIds: new Set(),
   audioContext: null,
+  eventLog: [],
+  eventSeqs: new Set(),
 };
 
 function setStatus(message, variant = "") {
@@ -152,6 +156,170 @@ function playMessageSound(message) {
 function saveToken(token) {
   localStorage.setItem("playerToken", token);
   state.token = token;
+}
+
+function formatActor(actor) {
+  if (actor === "host") {
+    return "Хост";
+  }
+  if (actor === "player") {
+    return "Игрок";
+  }
+  if (actor === "system") {
+    return "Система";
+  }
+  return actor || "—";
+}
+
+function formatTimestamp(ts) {
+  if (!ts) {
+    return "";
+  }
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) {
+    return ts;
+  }
+  return date.toLocaleString("ru-RU");
+}
+
+function getSlotLabel(slot) {
+  const found = EQUIPMENT_SLOTS.find((item) => item.key === slot);
+  return found ? found.label : slot || "—";
+}
+
+function describeEvent(event) {
+  const payload = event.payload || {};
+  switch (event.kind) {
+    case "xp.granted":
+      return `Опыт +${payload.amount ?? 0} (уровень ${payload.old_level ?? "?"} → ${
+        payload.new_level ?? "?"
+      })`;
+    case "level.up":
+      return `Уровень ${payload.new_level ?? "?"} (+${payload.stat_points_gained ?? 0} оч.)`;
+    case "inventory.added": {
+      const template = state.templates?.[payload.template_id];
+      const name = template?.name || payload.template_id || "предмет";
+      return `Добавлен предмет: ${name} ×${payload.qty ?? 1}`;
+    }
+    case "inventory.removed":
+      return `Удалён предмет: ${payload.item_instance_id || "—"}`;
+    case "equipment.equipped": {
+      const template = state.templates?.[payload.template_id];
+      const name = template?.name || payload.template_id || "предмет";
+      return `Экипирован ${name} в слот ${getSlotLabel(payload.slot)}`;
+    }
+    case "equipment.unequipped":
+      return `Снят предмет из слота ${getSlotLabel(payload.slot)}`;
+    case "equipment.requested":
+      return `Запрос экипировки: ${payload.item_instance_id || "—"} → ${getSlotLabel(
+        payload.slot,
+      )}`;
+    case "quest.assigned": {
+      const quest = state.questTemplates?.[payload.template_id];
+      const title = quest?.name || payload.template_id || "квест";
+      return `Назначен квест: ${title}`;
+    }
+    case "quest.status": {
+      const quest = payload.quest;
+      const title = quest?.title || quest?.name || payload.quest_id || "квест";
+      return `Статус квеста: ${title} → ${payload.status || "—"}`;
+    }
+    case "message.sent": {
+      const title = payload.message?.title || payload.title || "сообщение";
+      return `Системное сообщение: ${title}`;
+    }
+    case "message.choice": {
+      const title = payload.message?.title || "сообщение";
+      return `Выбор в сообщении: ${title}`;
+    }
+    case "player.freeze":
+      return payload.frozen ? "Игрок заморожен" : "Игрок разморожен";
+    case "currency.updated":
+      return `Валюта ${payload.currency_id || "—"}: ${payload.old_value ?? 0} → ${
+        payload.new_value ?? 0
+      }`;
+    case "resource.updated":
+      return `Ресурс ${payload.resource_id || "—"}: ${payload.old_current ?? 0}/${
+        payload.old_maximum ?? 0
+      } → ${payload.new_current ?? 0}/${payload.new_maximum ?? 0}`;
+    case "reputation.updated":
+      return `Репутация ${payload.reputation_id || "—"}: ${payload.old_value ?? 0} → ${
+        payload.new_value ?? 0
+      }`;
+    case "ability.added":
+      return `Добавлена способность: ${payload.ability?.name || payload.ability_id || "—"}`;
+    case "ability.updated":
+      return `Обновлена способность: ${payload.ability?.name || payload.ability_id || "—"}`;
+    case "ability.removed":
+      return `Удалена способность: ${payload.ability_id || "—"}`;
+    case "chat.contact.added":
+      return `Добавлен контакт: ${payload.contact?.display_name || payload.contact_id || "—"}`;
+    case "chat.friend_request.sent":
+      return `Отправлена заявка в друзья: ${payload.contact_id || "—"}`;
+    case "chat.friend_request.accepted":
+      return `Принята заявка в друзья: ${payload.contact_id || "—"}`;
+    case "chat.message":
+      return `Сообщение в чате: ${payload.text || "—"}`;
+    default:
+      return event.kind || "Событие";
+  }
+}
+
+function appendLogEvents(events) {
+  if (!Array.isArray(events)) {
+    return;
+  }
+  events.forEach((event) => {
+    const key = event.seq != null ? `seq:${event.seq}` : `${event.kind}:${event.ts}`;
+    if (state.eventSeqs.has(key)) {
+      return;
+    }
+    state.eventSeqs.add(key);
+    state.eventLog.push(event);
+  });
+}
+
+function renderLog() {
+  if (!logList) {
+    return;
+  }
+  logList.innerHTML = "";
+  const events = [...state.eventLog].sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0));
+  if (logCountEl) {
+    logCountEl.textContent = `${events.length}`;
+  }
+  if (events.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Событий пока нет.";
+    logList.appendChild(empty);
+    return;
+  }
+  events.forEach((event) => {
+    const entry = document.createElement("div");
+    entry.className = "log-entry";
+
+    const meta = document.createElement("div");
+    meta.className = "log-entry__meta";
+
+    const kind = document.createElement("div");
+    kind.className = "log-entry__kind";
+    kind.textContent = event.kind || "Событие";
+
+    const stamp = document.createElement("div");
+    stamp.textContent = `${formatTimestamp(event.ts)} · ${formatActor(event.actor)}`;
+
+    meta.appendChild(kind);
+    meta.appendChild(stamp);
+
+    const details = document.createElement("div");
+    details.className = "log-entry__details";
+    details.textContent = describeEvent(event);
+
+    entry.appendChild(meta);
+    entry.appendChild(details);
+    logList.appendChild(entry);
+  });
 }
 
 function getToken() {
@@ -523,6 +691,7 @@ function applyEvent(event) {
 }
 
 function applyEvents(events) {
+  appendLogEvents(events);
   events.forEach(applyEvent);
   render();
 }
@@ -541,6 +710,8 @@ function applySnapshot(snapshot) {
   state.contacts = snapshot.contacts || {};
   state.chats = snapshot.chats || {};
   state.friendRequests = snapshot.friend_requests || {};
+  state.eventLog = [];
+  state.eventSeqs = new Set();
   if (!state.character?.equipment) {
     state.character.equipment = {};
   }
@@ -577,6 +748,26 @@ function connectEventStream(token, afterSeq = 0) {
   state.socket = socket;
 }
 
+async function fetchEventLog(afterSeq = 0) {
+  const token = getToken();
+  if (!token) {
+    return;
+  }
+  try {
+    const response = await fetch(`/api/events?after_seq=${afterSeq}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new Error("Не удалось загрузить лог");
+    }
+    const payload = await response.json();
+    appendLogEvents(payload.events || []);
+    renderLog();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 async function fetchSnapshot() {
   const token = getToken();
   if (!token) {
@@ -596,6 +787,7 @@ async function fetchSnapshot() {
     const payload = await response.json();
     applySnapshot(payload.snapshot || {});
     saveToken(token);
+    await fetchEventLog(0);
     connectEventStream(token, payload.last_seq ?? 0);
   } catch (error) {
     setStatus(error.message, "error");
@@ -1211,6 +1403,7 @@ function render() {
   renderQuestGroups();
   renderAbilities();
   renderMessages();
+  renderLog();
   if (questCountEl) {
     questCountEl.textContent = `${state.activeQuests?.length || 0}`;
   }
