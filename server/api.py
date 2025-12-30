@@ -33,6 +33,26 @@ class GrantXpRequest(BaseModel):
     amount: int
 
 
+class XpCurveRequest(BaseModel):
+    base_xp: int = Field(..., ge=1)
+    growth_rate: float = Field(..., gt=0)
+
+
+class StatRuleRequest(BaseModel):
+    base_per_level: int = Field(..., ge=0)
+    bonus_every_5: int = Field(..., ge=0)
+    bonus_every_10: int = Field(..., ge=0)
+
+
+class SettingsUpdateRequest(BaseModel):
+    xp_curve: XpCurveRequest
+    stat_rule: StatRuleRequest
+
+
+class ClassBonusUpdateRequest(BaseModel):
+    per_level_bonus: Dict[str, int] = Field(default_factory=dict)
+
+
 class AddItemRequest(BaseModel):
     template_id: str
     qty: int = 1
@@ -267,6 +287,40 @@ async def grant_xp(
 ) -> Dict[str, Any]:
     return await _apply_service(
         context, lambda: context.service.grant_xp(payload.amount, actor_role=HOST_ROLE)
+    )
+
+
+@router.post("/host/settings", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def update_settings(
+    payload: SettingsUpdateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.update_settings(
+            base_xp=payload.xp_curve.base_xp,
+            growth_rate=payload.xp_curve.growth_rate,
+            base_per_level=payload.stat_rule.base_per_level,
+            bonus_every_5=payload.stat_rule.bonus_every_5,
+            bonus_every_10=payload.stat_rule.bonus_every_10,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post(
+    "/host/classes/{class_id}/per-level-bonus",
+    dependencies=[Depends(require_token_role(HOST_ROLE))],
+)
+async def update_class_bonus(
+    class_id: str, payload: ClassBonusUpdateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.update_class_per_level_bonus(
+            class_id=class_id,
+            per_level_bonus=payload.per_level_bonus,
+            actor_role=HOST_ROLE,
+        ),
     )
 
 

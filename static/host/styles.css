@@ -102,17 +102,24 @@ h3 {
 
 input,
 button,
-select {
+select,
+textarea {
   font: inherit;
 }
 
 input,
-select {
+select,
+textarea {
   background: #0f131c;
   border: 1px solid #2a3142;
   border-radius: 10px;
   padding: 10px 12px;
   color: #f5f7ff;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 90px;
 }
 
 button {
@@ -139,6 +146,12 @@ button:disabled {
   display: flex;
   gap: 12px;
   margin-top: 12px;
+}
+
+.divider {
+  height: 1px;
+  background: #2a3142;
+  margin: 20px 0;
 }
 
 .tabs {

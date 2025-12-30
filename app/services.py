@@ -30,6 +30,7 @@ from domain.services import (
     equip_item as equip_item_domain,
     grant_xp_and_level,
 )
+from domain.rules import StatPointRule, XPCurveExponential
 
 from .permissions import (
     HOST_ROLE,
@@ -58,6 +59,71 @@ class CampaignService:
             self.state.system_messages.extend(messages)
             events.extend(self._events_for_messages(messages, actor_role))
         return events
+
+    def update_settings(
+        self,
+        base_xp: int,
+        growth_rate: float,
+        base_per_level: int,
+        bonus_every_5: int,
+        bonus_every_10: int,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        self.state.settings.xp_curve = XPCurveExponential(
+            base_xp=base_xp,
+            growth_rate=growth_rate,
+        )
+        self.state.settings.stat_rule = StatPointRule(
+            base_per_level=base_per_level,
+            bonus_every_5=bonus_every_5,
+            bonus_every_10=bonus_every_10,
+        )
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.settings_updated.value,
+                payload={
+                    "xp_curve": {
+                        "base_xp": base_xp,
+                        "growth_rate": growth_rate,
+                    },
+                    "stat_rule": {
+                        "base_per_level": base_per_level,
+                        "bonus_every_5": bonus_every_5,
+                        "bonus_every_10": bonus_every_10,
+                    },
+                },
+            )
+        ]
+
+    def update_class_per_level_bonus(
+        self,
+        class_id: str,
+        per_level_bonus: dict,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        class_def = self.state.classes.get(class_id)
+        if not class_def:
+            raise DomainError("Class not found")
+        class_def.per_level_bonus.per_level_stat_delta = {
+            str(key): int(value) for key, value in per_level_bonus.items()
+        }
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.class_bonus_updated.value,
+                payload={
+                    "class_id": class_id,
+                    "per_level_bonus": class_def.per_level_bonus.per_level_stat_delta,
+                },
+            )
+        ]
 
     def add_item_instance(
         self,
