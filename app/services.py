@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import List, Optional
 
 from domain.errors import DomainError, QuestError
@@ -24,6 +24,7 @@ from domain.models import (
     QuestInstance,
     QuestStatus,
     Rarity,
+    SheetSectionSettings,
     SystemMessage,
     chat_link_from_dict,
     chat_link_to_dict,
@@ -66,40 +67,66 @@ class CampaignService:
 
     def update_settings(
         self,
-        base_xp: int,
-        growth_rate: float,
-        base_per_level: int,
-        bonus_every_5: int,
-        bonus_every_10: int,
+        base_xp: Optional[int] = None,
+        growth_rate: Optional[float] = None,
+        base_per_level: Optional[int] = None,
+        bonus_every_5: Optional[int] = None,
+        bonus_every_10: Optional[int] = None,
+        sheet_sections: Optional[List[dict]] = None,
         actor_role: str = HOST_ROLE,
     ) -> List[EventLogEntry]:
         ensure_host(actor_role)
-        self.state.settings.xp_curve = XPCurveExponential(
-            base_xp=base_xp,
-            growth_rate=growth_rate,
-        )
-        self.state.settings.stat_rule = StatPointRule(
-            base_per_level=base_per_level,
-            bonus_every_5=bonus_every_5,
-            bonus_every_10=bonus_every_10,
-        )
+        payload: dict = {}
+        if base_xp is not None and growth_rate is not None:
+            self.state.settings.xp_curve = XPCurveExponential(
+                base_xp=base_xp,
+                growth_rate=growth_rate,
+            )
+            payload["xp_curve"] = {
+                "base_xp": base_xp,
+                "growth_rate": growth_rate,
+            }
+        if (
+            base_per_level is not None
+            and bonus_every_5 is not None
+            and bonus_every_10 is not None
+        ):
+            self.state.settings.stat_rule = StatPointRule(
+                base_per_level=base_per_level,
+                bonus_every_5=bonus_every_5,
+                bonus_every_10=bonus_every_10,
+            )
+            payload["stat_rule"] = {
+                "base_per_level": base_per_level,
+                "bonus_every_5": bonus_every_5,
+                "bonus_every_10": bonus_every_10,
+            }
+        if sheet_sections is not None:
+            normalized = []
+            for index, section in enumerate(sheet_sections):
+                key = str(section.get("key", "")).strip()
+                if not key:
+                    continue
+                normalized.append(
+                    SheetSectionSettings(
+                        key=key,
+                        title=str(section.get("title", key)),
+                        visible=bool(section.get("visible", True)),
+                        order=int(section.get("order", index + 1)),
+                    )
+                )
+            if normalized:
+                self.state.settings.sheet_sections = normalized
+                payload["sheet_sections"] = [asdict(section) for section in normalized]
+        if not payload:
+            return []
         return [
             EventLogEntry(
                 seq=0,
                 ts=utcnow(),
                 actor=actor_role,
                 kind=EventKind.settings_updated.value,
-                payload={
-                    "xp_curve": {
-                        "base_xp": base_xp,
-                        "growth_rate": growth_rate,
-                    },
-                    "stat_rule": {
-                        "base_per_level": base_per_level,
-                        "bonus_every_5": bonus_every_5,
-                        "bonus_every_10": bonus_every_10,
-                    },
-                },
+                payload=payload,
             )
         ]
 

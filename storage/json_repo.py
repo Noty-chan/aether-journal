@@ -31,6 +31,8 @@ from domain.models import (
     QuestInstance,
     QuestTemplate,
     Rarity,
+    SheetSectionSettings,
+    default_sheet_sections,
     SystemMessage,
     MessageTemplate,
     chat_link_from_dict,
@@ -229,12 +231,28 @@ def serialize_campaign_settings(settings: CampaignSettings) -> Dict[str, Any]:
         },
         "stat_rule": asdict(settings.stat_rule),
         "equipment_category_id": settings.equipment_category_id,
+        "sheet_sections": [asdict(section) for section in settings.sheet_sections],
     }
 
 
 def deserialize_campaign_settings(data: Dict[str, Any]) -> CampaignSettings:
     xp_curve = data.get("xp_curve", {})
     stat_rule = data.get("stat_rule", {})
+    raw_sections = data.get("sheet_sections")
+    sheet_sections = []
+    if isinstance(raw_sections, list):
+        for index, section in enumerate(raw_sections):
+            key = str(section.get("key", "")).strip()
+            if not key:
+                continue
+            sheet_sections.append(
+                SheetSectionSettings(
+                    key=key,
+                    title=str(section.get("title", key)),
+                    visible=bool(section.get("visible", True)),
+                    order=int(section.get("order", index + 1)),
+                )
+            )
     return CampaignSettings(
         xp_curve=XPCurveExponential(
             base_xp=int(xp_curve.get("base_xp", 200)),
@@ -246,6 +264,7 @@ def deserialize_campaign_settings(data: Dict[str, Any]) -> CampaignSettings:
             bonus_every_10=int(stat_rule.get("bonus_every_10", 1)),
         ),
         equipment_category_id=str(data.get("equipment_category_id", "equipment")),
+        sheet_sections=sheet_sections or default_sheet_sections(),
     )
 
 

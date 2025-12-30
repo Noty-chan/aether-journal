@@ -147,10 +147,28 @@ class Character:
 
 
 @dataclass
+class SheetSectionSettings:
+    key: str
+    title: str
+    visible: bool = True
+    order: int = 0
+
+
+def default_sheet_sections() -> List[SheetSectionSettings]:
+    return [
+        SheetSectionSettings(key="stats", title="Статы", visible=True, order=1),
+        SheetSectionSettings(key="resources", title="Ресурсы", visible=True, order=2),
+        SheetSectionSettings(key="currencies", title="Валюты", visible=True, order=3),
+        SheetSectionSettings(key="reputations", title="Репутации", visible=True, order=4),
+    ]
+
+
+@dataclass
 class CampaignSettings:
     xp_curve: "XPCurveExponential" = field(default_factory=lambda: XPCurveExponential())
     stat_rule: "StatPointRule" = field(default_factory=lambda: StatPointRule())
     equipment_category_id: str = "equipment"
+    sheet_sections: List[SheetSectionSettings] = field(default_factory=default_sheet_sections)
 
 
 @dataclass

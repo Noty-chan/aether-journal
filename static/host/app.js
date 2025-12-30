@@ -12,10 +12,7 @@ const xpFillEl = document.getElementById("xp-fill");
 const xpInput = document.getElementById("xp-input");
 const xpSubmitBtn = document.getElementById("xp-submit");
 const xpStatusEl = document.getElementById("xp-status");
-const statsList = document.getElementById("stats-list");
-const resourcesList = document.getElementById("resources-list");
-const currenciesList = document.getElementById("currencies-list");
-const reputationsList = document.getElementById("reputations-list");
+const sheetSectionsContainer = document.getElementById("sheet-sections");
 const inventoryList = document.getElementById("inventory-list");
 const inventoryCountEl = document.getElementById("inventory-count");
 const itemCard = document.getElementById("item-card");
@@ -40,6 +37,9 @@ const rulesClassSelect = document.getElementById("rules-class-select");
 const rulesClassBonusInput = document.getElementById("rules-class-bonus");
 const rulesClassSaveBtn = document.getElementById("rules-class-save");
 const rulesClassStatusEl = document.getElementById("rules-class-status");
+const sheetSettingsContainer = document.getElementById("sheet-settings");
+const sheetSettingsSaveBtn = document.getElementById("sheet-settings-save");
+const sheetSettingsStatusEl = document.getElementById("sheet-settings-status");
 const itemTemplateNameInput = document.getElementById("item-template-name");
 const itemTemplateTypeSelect = document.getElementById("item-template-type");
 const itemTemplateRaritySelect = document.getElementById("item-template-rarity");
@@ -81,6 +81,20 @@ const ITEM_TYPE_SLOT_HINTS = {
   accessory: ["ring_1", "ring_2"],
 };
 
+const SHEET_SECTION_INFO = {
+  stats: { label: "Статы", empty: "Нет статов" },
+  resources: { label: "Ресурсы", empty: "Нет ресурсов" },
+  currencies: { label: "Валюты", empty: "Нет валют" },
+  reputations: { label: "Репутации", empty: "Нет репутаций" },
+};
+
+const DEFAULT_SHEET_SECTIONS = [
+  { key: "stats", title: "Статы", visible: true, order: 1 },
+  { key: "resources", title: "Ресурсы", visible: true, order: 2 },
+  { key: "currencies", title: "Валюты", visible: true, order: 3 },
+  { key: "reputations", title: "Репутации", visible: true, order: 4 },
+];
+
 const state = {
   token: "",
   snapshot: null,
@@ -103,6 +117,9 @@ const state = {
   eventLog: [],
   eventSeqs: new Set(),
   classOptionsKey: "",
+  sheetSectionsKey: "",
+  sheetSectionNodes: {},
+  sheetSettingsKey: "",
 };
 
 function setStatus(message, variant = "") {
@@ -140,6 +157,17 @@ function setRulesClassStatus(message, variant = "") {
   rulesClassStatusEl.classList.remove("status--ok", "status--error");
   if (variant) {
     rulesClassStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setSheetSettingsStatus(message, variant = "") {
+  if (!sheetSettingsStatusEl) {
+    return;
+  }
+  sheetSettingsStatusEl.textContent = message;
+  sheetSettingsStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    sheetSettingsStatusEl.classList.add(`status--${variant}`);
   }
 }
 
@@ -697,6 +725,9 @@ function applySettingsUpdated(payload) {
   if (payload.stat_rule) {
     state.settings.stat_rule = payload.stat_rule;
   }
+  if (payload.sheet_sections) {
+    state.settings.sheet_sections = payload.sheet_sections;
+  }
   renderSettings();
 }
 
@@ -818,6 +849,9 @@ function applySnapshot(snapshot) {
   state.eventLog = [];
   state.eventSeqs = new Set();
   state.classOptionsKey = "";
+  state.sheetSectionsKey = "";
+  state.sheetSectionNodes = {};
+  state.sheetSettingsKey = "";
   if (!state.character?.equipment) {
     state.character.equipment = {};
   }
@@ -952,10 +986,115 @@ function renderList(container, items, emptyMessage) {
   });
 }
 
+function getSheetSectionsConfig() {
+  const configured = state.settings?.sheet_sections;
+  if (Array.isArray(configured) && configured.length > 0) {
+    return configured.map((section, index) => ({
+      key: section.key,
+      title: section.title || SHEET_SECTION_INFO[section.key]?.label || section.key,
+      visible: section.visible ?? true,
+      order: Number.isFinite(section.order) ? section.order : index + 1,
+    }));
+  }
+  return DEFAULT_SHEET_SECTIONS.map((section) => ({ ...section }));
+}
+
+function renderSheetSections() {
+  if (!sheetSectionsContainer) {
+    return;
+  }
+  const sections = getSheetSectionsConfig()
+    .slice()
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const key = JSON.stringify(sections);
+  if (state.sheetSectionsKey === key && Object.keys(state.sheetSectionNodes).length) {
+    return;
+  }
+  sheetSectionsContainer.innerHTML = "";
+  state.sheetSectionNodes = {};
+  sections.forEach((section) => {
+    if (!section.visible) {
+      return;
+    }
+    const wrapper = document.createElement("div");
+    wrapper.className = "sheet__section";
+    const title = document.createElement("h3");
+    title.textContent = section.title || section.key;
+    const list = document.createElement("div");
+    list.className = "list";
+    wrapper.appendChild(title);
+    wrapper.appendChild(list);
+    sheetSectionsContainer.appendChild(wrapper);
+    state.sheetSectionNodes[section.key] = {
+      list,
+      empty:
+        SHEET_SECTION_INFO[section.key]?.empty ||
+        `Нет данных: ${section.title || section.key}`,
+    };
+  });
+  state.sheetSectionsKey = key;
+}
+
+function renderSheetSettings() {
+  if (!sheetSettingsContainer) {
+    return;
+  }
+  if (sheetSettingsContainer.contains(document.activeElement)) {
+    return;
+  }
+  const sections = getSheetSectionsConfig()
+    .slice()
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const key = JSON.stringify(sections);
+  if (state.sheetSettingsKey === key && sheetSettingsContainer.childElementCount) {
+    return;
+  }
+  sheetSettingsContainer.innerHTML = "";
+  sections.forEach((section, index) => {
+    const row = document.createElement("div");
+    row.className = "sheet-settings__row";
+    row.dataset.key = section.key;
+
+    const label = document.createElement("div");
+    label.className = "sheet-settings__label";
+    label.textContent = SHEET_SECTION_INFO[section.key]?.label || section.key;
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.value = section.title || section.key;
+    titleInput.dataset.field = "title";
+
+    const orderInput = document.createElement("input");
+    orderInput.type = "number";
+    orderInput.min = "1";
+    orderInput.value = String(section.order ?? index + 1);
+    orderInput.dataset.field = "order";
+
+    const visibleLabel = document.createElement("label");
+    visibleLabel.className = "sheet-settings__checkbox";
+    const visibleInput = document.createElement("input");
+    visibleInput.type = "checkbox";
+    visibleInput.checked = section.visible ?? true;
+    visibleInput.dataset.field = "visible";
+    const visibleText = document.createElement("span");
+    visibleText.textContent = "Показывать";
+    visibleLabel.appendChild(visibleInput);
+    visibleLabel.appendChild(visibleText);
+
+    row.appendChild(label);
+    row.appendChild(titleInput);
+    row.appendChild(orderInput);
+    row.appendChild(visibleLabel);
+    sheetSettingsContainer.appendChild(row);
+  });
+  state.sheetSettingsKey = key;
+}
+
 function renderSheet() {
   if (!state.character) {
     return;
   }
+  renderSheetSections();
   const classDef = state.classes?.[state.character.class_id];
   characterNameEl.textContent = state.character.name || "Без имени";
   characterClassEl.textContent = classDef
@@ -1004,10 +1143,30 @@ function renderSheet() {
     ([key, value]) => ({ label: key, value }),
   );
 
-  renderList(statsList, stats, "Нет статов");
-  renderList(resourcesList, resources, "Нет ресурсов");
-  renderList(currenciesList, currencies, "Нет валют");
-  renderList(reputationsList, reputations, "Нет репутаций");
+  if (state.sheetSectionNodes.stats) {
+    renderList(state.sheetSectionNodes.stats.list, stats, state.sheetSectionNodes.stats.empty);
+  }
+  if (state.sheetSectionNodes.resources) {
+    renderList(
+      state.sheetSectionNodes.resources.list,
+      resources,
+      state.sheetSectionNodes.resources.empty,
+    );
+  }
+  if (state.sheetSectionNodes.currencies) {
+    renderList(
+      state.sheetSectionNodes.currencies.list,
+      currencies,
+      state.sheetSectionNodes.currencies.empty,
+    );
+  }
+  if (state.sheetSectionNodes.reputations) {
+    renderList(
+      state.sheetSectionNodes.reputations.list,
+      reputations,
+      state.sheetSectionNodes.reputations.empty,
+    );
+  }
 }
 
 function renderInventory() {
@@ -1635,6 +1794,7 @@ function renderSettings() {
       rulesClassBonusInput.value = JSON.stringify(bonus, null, 2);
     }
   }
+  renderSheetSettings();
 }
 
 function render() {
@@ -1840,6 +2000,57 @@ async function updateRulesSettings() {
     setRulesStatus(error.message, "error");
   } finally {
     rulesSaveBtn.disabled = false;
+  }
+}
+
+async function updateSheetSettings() {
+  const token = getToken();
+  if (!token) {
+    setSheetSettingsStatus("Укажите токен", "error");
+    return;
+  }
+  if (!sheetSettingsContainer) {
+    return;
+  }
+  const rows = Array.from(sheetSettingsContainer.querySelectorAll(".sheet-settings__row"));
+  const sections = rows.map((row, index) => {
+    const titleInput = row.querySelector('[data-field="title"]');
+    const orderInput = row.querySelector('[data-field="order"]');
+    const visibleInput = row.querySelector('[data-field="visible"]');
+    const orderValue = Number(orderInput?.value);
+    return {
+      key: row.dataset.key || "",
+      title: titleInput?.value?.trim() || row.dataset.key || "",
+      visible: Boolean(visibleInput?.checked),
+      order: Number.isFinite(orderValue) ? orderValue : index + 1,
+    };
+  });
+  if (!sections.length) {
+    setSheetSettingsStatus("Нет секций для сохранения", "error");
+    return;
+  }
+  sheetSettingsSaveBtn.disabled = true;
+  setSheetSettingsStatus("Сохранение...");
+  try {
+    const response = await fetch("/api/host/settings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ sheet_sections: sections }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось сохранить настройки листа");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setSheetSettingsStatus("Настройки листа обновлены", "ok");
+  } catch (error) {
+    setSheetSettingsStatus(error.message, "error");
+  } finally {
+    sheetSettingsSaveBtn.disabled = false;
   }
 }
 
@@ -2102,6 +2313,10 @@ document.querySelectorAll("[data-xp]").forEach((button) => {
 
 if (rulesSaveBtn) {
   rulesSaveBtn.addEventListener("click", updateRulesSettings);
+}
+
+if (sheetSettingsSaveBtn) {
+  sheetSettingsSaveBtn.addEventListener("click", updateSheetSettings);
 }
 
 if (rulesClassSaveBtn) {
