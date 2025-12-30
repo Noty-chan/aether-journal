@@ -276,7 +276,10 @@ def serialize_character(character: Character) -> Dict[str, Any]:
 
 def deserialize_character(data: Dict[str, Any]) -> Character:
     resources: Dict[str, tuple[int, int]] = {}
-    for key, values in data.get("resources", {}).items():
+    raw_resources = data.get("resources", {})
+    if not isinstance(raw_resources, dict):
+        raw_resources = {}
+    for key, values in raw_resources.items():
         if not isinstance(values, (list, tuple)) or len(values) < 2:
             continue
         try:
@@ -372,6 +375,12 @@ def serialize_item_template(template: ItemTemplate) -> Dict[str, Any]:
 
 
 def deserialize_item_template(data: Dict[str, Any]) -> ItemTemplate:
+    equip_slots: List[EquipmentSlot] = []
+    for slot in data.get("equip_slots", []):
+        try:
+            equip_slots.append(EquipmentSlot(slot))
+        except ValueError:
+            continue
     return ItemTemplate(
         id=str(data.get("id", new_id("tpl"))),
         name=str(data.get("name", "")),
@@ -379,7 +388,7 @@ def deserialize_item_template(data: Dict[str, Any]) -> ItemTemplate:
         rarity=Rarity(data.get("rarity", Rarity.white.value)),
         description=str(data.get("description", "")),
         icon_key=data.get("icon_key"),
-        equip_slots=[EquipmentSlot(slot) for slot in data.get("equip_slots", [])],
+        equip_slots=equip_slots,
         two_handed=bool(data.get("two_handed", False)),
         stat_mods=dict(data.get("stat_mods", {})),
         granted_ability_ids=list(data.get("granted_ability_ids", [])),
@@ -399,12 +408,24 @@ def serialize_class_def(class_def: ClassDefinition) -> Dict[str, Any]:
 
 
 def deserialize_class_def(data: Dict[str, Any]) -> ClassDefinition:
+    allowed_item_types: List[ItemType] = []
+    for item_type in data.get("allowed_item_types", []):
+        try:
+            allowed_item_types.append(ItemType(item_type))
+        except ValueError:
+            continue
+    allowed_slots: List[EquipmentSlot] = []
+    for slot in data.get("allowed_slots", []):
+        try:
+            allowed_slots.append(EquipmentSlot(slot))
+        except ValueError:
+            continue
     return ClassDefinition(
         id=str(data.get("id", new_id("class"))),
         name=str(data.get("name", "")),
         description=str(data.get("description", "")),
-        allowed_item_types=[ItemType(t) for t in data.get("allowed_item_types", [])],
-        allowed_slots=[EquipmentSlot(s) for s in data.get("allowed_slots", [])],
+        allowed_item_types=allowed_item_types,
+        allowed_slots=allowed_slots,
         per_level_bonus=ClassPerLevelBonus(
             per_level_stat_delta=dict(data.get("per_level_bonus", {}))
         ),

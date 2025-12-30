@@ -32,6 +32,7 @@ from domain.models import (
 from domain.services import (
     choose_message_option,
     ensure_quest_not_duplicated,
+    can_equip_item,
     equip_item as equip_item_domain,
     grant_levels,
     grant_xp_and_level,
@@ -363,8 +364,12 @@ class CampaignService:
         inst = self.state.character.inventory.get(item_instance_id)
         if not inst:
             raise DomainError("Item instance not found in inventory")
-        if inst.template_id not in self.state.item_templates:
+        template = self.state.item_templates.get(inst.template_id)
+        if not template:
             raise DomainError("Item template not found")
+        class_def = self._get_class_def()
+        if not can_equip_item(class_def, template, slot):
+            raise DomainError("Class restrictions or slot incompatibility")
         return [
             EventLogEntry(
                 seq=0,
