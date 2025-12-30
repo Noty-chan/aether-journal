@@ -108,6 +108,10 @@
             <h2>Квесты</h2>
             <span class="meta" id="quest-count">0</span>
           </div>
+          <div class="form-row">
+            <label for="quest-search">Поиск</label>
+            <input id="quest-search" type="text" placeholder="Название или описание" />
+          </div>
           <div class="quest-groups" id="quest-status-groups"></div>
         </section>
       </section>
@@ -129,6 +133,40 @@
             <span class="meta" id="messages-count">0</span>
           </div>
           <div class="messages" id="system-messages"></div>
+        </section>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Звук уведомлений</h2>
+            <span class="meta">Громкость и микс</span>
+          </div>
+          <div class="range-grid">
+            <div class="range-row">
+              <label for="sound-master">Общая громкость</label>
+              <input id="sound-master" type="range" min="0" max="100" step="5" />
+              <span class="range-value" id="sound-master-value">100%</span>
+            </div>
+            <div class="range-row">
+              <label for="sound-info">Инфо</label>
+              <input id="sound-info" type="range" min="0" max="100" step="5" />
+              <span class="range-value" id="sound-info-value">80%</span>
+            </div>
+            <div class="range-row">
+              <label for="sound-warning">Внимание</label>
+              <input id="sound-warning" type="range" min="0" max="100" step="5" />
+              <span class="range-value" id="sound-warning-value">90%</span>
+            </div>
+            <div class="range-row">
+              <label for="sound-alert">Тревога</label>
+              <input id="sound-alert" type="range" min="0" max="100" step="5" />
+              <span class="range-value" id="sound-alert-value">100%</span>
+            </div>
+            <div class="range-row">
+              <label for="sound-level-up">Level up</label>
+              <input id="sound-level-up" type="range" min="0" max="100" step="5" />
+              <span class="range-value" id="sound-level-up-value">100%</span>
+            </div>
+          </div>
+          <div class="hint">Настройки сохраняются в браузере текущего устройства.</div>
         </section>
       </section>
 
