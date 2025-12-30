@@ -298,6 +298,52 @@ button:disabled {
   padding: 12px;
 }
 
+.sheet-settings {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sheet-settings__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 2fr) 90px 120px 92px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #101521;
+  border: 1px solid #262c3d;
+}
+
+.sheet-settings__label {
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+.sheet-settings__row input[type="text"],
+.sheet-settings__row input[type="number"] {
+  width: 100%;
+}
+
+.sheet-settings__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #cbd5f5;
+}
+
+.sheet-settings__move {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.sheet-settings__move button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
 .list {
   display: flex;
   flex-direction: column;

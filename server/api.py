@@ -46,9 +46,17 @@ class StatRuleRequest(BaseModel):
     bonus_every_10: int = Field(..., ge=0)
 
 
+class SheetSectionRequest(BaseModel):
+    key: str
+    title: str
+    visible: bool = True
+    order: int = 0
+
+
 class SettingsUpdateRequest(BaseModel):
-    xp_curve: XpCurveRequest
-    stat_rule: StatRuleRequest
+    xp_curve: Optional[XpCurveRequest] = None
+    stat_rule: Optional[StatRuleRequest] = None
+    sheet_sections: Optional[List[SheetSectionRequest]] = None
 
 
 class ClassBonusUpdateRequest(BaseModel):
@@ -320,11 +328,14 @@ async def update_settings(
     return await _apply_service(
         context,
         lambda: context.service.update_settings(
-            base_xp=payload.xp_curve.base_xp,
-            growth_rate=payload.xp_curve.growth_rate,
-            base_per_level=payload.stat_rule.base_per_level,
-            bonus_every_5=payload.stat_rule.bonus_every_5,
-            bonus_every_10=payload.stat_rule.bonus_every_10,
+            base_xp=payload.xp_curve.base_xp if payload.xp_curve else None,
+            growth_rate=payload.xp_curve.growth_rate if payload.xp_curve else None,
+            base_per_level=payload.stat_rule.base_per_level if payload.stat_rule else None,
+            bonus_every_5=payload.stat_rule.bonus_every_5 if payload.stat_rule else None,
+            bonus_every_10=payload.stat_rule.bonus_every_10 if payload.stat_rule else None,
+            sheet_sections=[section.dict() for section in (payload.sheet_sections or [])]
+            if payload.sheet_sections is not None
+            else None,
             actor_role=HOST_ROLE,
         ),
     )

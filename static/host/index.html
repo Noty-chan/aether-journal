@@ -85,24 +85,7 @@
               </div>
             </div>
 
-            <div class="sheet__sections">
-              <div class="sheet__section">
-                <h3>Статы</h3>
-                <div class="list" id="stats-list"></div>
-              </div>
-              <div class="sheet__section">
-                <h3>Ресурсы</h3>
-                <div class="list" id="resources-list"></div>
-              </div>
-              <div class="sheet__section">
-                <h3>Валюты</h3>
-                <div class="list" id="currencies-list"></div>
-              </div>
-              <div class="sheet__section">
-                <h3>Репутации</h3>
-                <div class="list" id="reputations-list"></div>
-              </div>
-            </div>
+            <div class="sheet__sections" id="sheet-sections"></div>
           </section>
 
           <section class="panel inventory">
@@ -176,6 +159,18 @@
             <button id="rules-class-save" type="button">Сохранить бонусы</button>
           </div>
           <div class="hint" id="rules-class-status">Изменений нет.</div>
+          <div class="divider"></div>
+          <h3>Лист персонажа</h3>
+          <div class="sheet-settings" id="sheet-settings"></div>
+          <div class="form-actions">
+            <button id="sheet-settings-save" type="button">
+              Сохранить настройки листа
+            </button>
+            <button id="sheet-settings-reset" type="button" class="ghost">
+              Сбросить к умолчаниям
+            </button>
+          </div>
+          <div class="hint" id="sheet-settings-status">Изменений нет.</div>
         </section>
       </section>
 

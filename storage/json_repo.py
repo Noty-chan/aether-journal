@@ -35,6 +35,8 @@ from domain.models import (
     MessageTemplate,
     chat_link_from_dict,
     chat_link_to_dict,
+    default_sheet_sections,
+    normalize_sheet_sections,
 )
 from domain.rules import ClassPerLevelBonus, StatPointRule, XPCurveExponential
 
@@ -229,12 +231,15 @@ def serialize_campaign_settings(settings: CampaignSettings) -> Dict[str, Any]:
         },
         "stat_rule": asdict(settings.stat_rule),
         "equipment_category_id": settings.equipment_category_id,
+        "sheet_sections": [asdict(section) for section in settings.sheet_sections],
     }
 
 
 def deserialize_campaign_settings(data: Dict[str, Any]) -> CampaignSettings:
     xp_curve = data.get("xp_curve", {})
     stat_rule = data.get("stat_rule", {})
+    raw_sections = data.get("sheet_sections")
+    sheet_sections = normalize_sheet_sections(raw_sections if isinstance(raw_sections, list) else None)
     return CampaignSettings(
         xp_curve=XPCurveExponential(
             base_xp=int(xp_curve.get("base_xp", 200)),
@@ -246,6 +251,7 @@ def deserialize_campaign_settings(data: Dict[str, Any]) -> CampaignSettings:
             bonus_every_10=int(stat_rule.get("bonus_every_10", 1)),
         ),
         equipment_category_id=str(data.get("equipment_category_id", "equipment")),
+        sheet_sections=sheet_sections or default_sheet_sections(),
     )
 
 

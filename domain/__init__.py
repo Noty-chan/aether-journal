@@ -26,9 +26,11 @@ from .models import (
     QuestStatus,
     QuestTemplate,
     Rarity,
+    SheetSectionSettings,
     SystemMessage,
     chat_link_from_dict,
     chat_link_to_dict,
+    normalize_sheet_sections,
 )
 from .events import EventLogEntry
 from .errors import DomainError, EquipError, PermissionError, QuestError
@@ -71,7 +73,9 @@ __all__ = [
     "QuestStatus",
     "QuestTemplate",
     "Rarity",
+    "SheetSectionSettings",
     "SystemMessage",
+    "normalize_sheet_sections",
     "chat_link_from_dict",
     "chat_link_to_dict",
     "DomainError",

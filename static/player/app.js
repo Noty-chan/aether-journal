@@ -12,10 +12,7 @@ const xpCurrentEl = document.getElementById("xp-current");
 const xpNextEl = document.getElementById("xp-next");
 const xpFillEl = document.getElementById("xp-fill");
 const freezeStatusEl = document.getElementById("freeze-status");
-const statsList = document.getElementById("stats-list");
-const resourcesList = document.getElementById("resources-list");
-const currenciesList = document.getElementById("currencies-list");
-const reputationsList = document.getElementById("reputations-list");
+const sheetSectionsContainer = document.getElementById("sheet-sections");
 const inventoryList = document.getElementById("inventory-list");
 const inventoryCountEl = document.getElementById("inventory-count");
 const itemCard = document.getElementById("item-card");
@@ -46,6 +43,20 @@ const ITEM_TYPE_SLOT_HINTS = {
   accessory: ["ring_1", "ring_2"],
 };
 
+const SHEET_SECTION_INFO = {
+  stats: { label: "Статы", empty: "Нет статов" },
+  resources: { label: "Ресурсы", empty: "Нет ресурсов" },
+  currencies: { label: "Валюты", empty: "Нет валют" },
+  reputations: { label: "Репутации", empty: "Нет репутаций" },
+};
+
+const DEFAULT_SHEET_SECTIONS = [
+  { key: "stats", title: "Статы", visible: true, order: 1 },
+  { key: "resources", title: "Ресурсы", visible: true, order: 2 },
+  { key: "currencies", title: "Валюты", visible: true, order: 3 },
+  { key: "reputations", title: "Репутации", visible: true, order: 4 },
+];
+
 const state = {
   contacts: {},
   chats: {},
@@ -69,6 +80,8 @@ const state = {
   audioContext: null,
   eventLog: [],
   eventSeqs: new Set(),
+  sheetSectionsKey: "",
+  sheetSectionNodes: {},
 };
 
 function setStatus(message, variant = "") {
@@ -603,6 +616,10 @@ function applySettingsUpdated(payload) {
   if (payload.stat_rule) {
     state.settings.stat_rule = payload.stat_rule;
   }
+  if (payload.sheet_sections) {
+    state.settings.sheet_sections = payload.sheet_sections;
+    state.sheetSectionsKey = "";
+  }
 }
 
 function applyClassBonusUpdated(payload) {
@@ -767,6 +784,8 @@ function applySnapshot(snapshot) {
   state.friendRequests = snapshot.friend_requests || {};
   state.eventLog = [];
   state.eventSeqs = new Set();
+  state.sheetSectionsKey = "";
+  state.sheetSectionNodes = {};
   if (!state.character?.equipment) {
     state.character.equipment = {};
   }
@@ -903,10 +922,60 @@ function renderList(container, items, emptyMessage) {
   });
 }
 
+function getSheetSectionsConfig() {
+  const configured = state.settings?.sheet_sections;
+  if (Array.isArray(configured) && configured.length > 0) {
+    return configured.map((section, index) => ({
+      key: section.key,
+      title: section.title || SHEET_SECTION_INFO[section.key]?.label || section.key,
+      visible: section.visible ?? true,
+      order: Number.isFinite(section.order) ? section.order : index + 1,
+    }));
+  }
+  return DEFAULT_SHEET_SECTIONS.map((section) => ({ ...section }));
+}
+
+function renderSheetSections() {
+  if (!sheetSectionsContainer) {
+    return;
+  }
+  const sections = getSheetSectionsConfig()
+    .slice()
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const key = JSON.stringify(sections);
+  if (state.sheetSectionsKey === key && Object.keys(state.sheetSectionNodes).length) {
+    return;
+  }
+  sheetSectionsContainer.innerHTML = "";
+  state.sheetSectionNodes = {};
+  sections.forEach((section) => {
+    if (!section.visible) {
+      return;
+    }
+    const wrapper = document.createElement("div");
+    wrapper.className = "sheet__section";
+    const title = document.createElement("h3");
+    title.textContent = section.title || section.key;
+    const list = document.createElement("div");
+    list.className = "list";
+    wrapper.appendChild(title);
+    wrapper.appendChild(list);
+    sheetSectionsContainer.appendChild(wrapper);
+    state.sheetSectionNodes[section.key] = {
+      list,
+      empty:
+        SHEET_SECTION_INFO[section.key]?.empty ||
+        `Нет данных: ${section.title || section.key}`,
+    };
+  });
+  state.sheetSectionsKey = key;
+}
+
 function renderSheet() {
   if (!state.character) {
     return;
   }
+  renderSheetSections();
   const classDef = state.classes?.[state.character.class_id];
   characterNameEl.textContent = state.character.name || "Без имени";
   characterClassEl.textContent = classDef
@@ -954,10 +1023,30 @@ function renderSheet() {
     ([key, value]) => ({ label: key, value }),
   );
 
-  renderList(statsList, stats, "Нет статов");
-  renderList(resourcesList, resources, "Нет ресурсов");
-  renderList(currenciesList, currencies, "Нет валют");
-  renderList(reputationsList, reputations, "Нет репутаций");
+  if (state.sheetSectionNodes.stats) {
+    renderList(state.sheetSectionNodes.stats.list, stats, state.sheetSectionNodes.stats.empty);
+  }
+  if (state.sheetSectionNodes.resources) {
+    renderList(
+      state.sheetSectionNodes.resources.list,
+      resources,
+      state.sheetSectionNodes.resources.empty,
+    );
+  }
+  if (state.sheetSectionNodes.currencies) {
+    renderList(
+      state.sheetSectionNodes.currencies.list,
+      currencies,
+      state.sheetSectionNodes.currencies.empty,
+    );
+  }
+  if (state.sheetSectionNodes.reputations) {
+    renderList(
+      state.sheetSectionNodes.reputations.list,
+      reputations,
+      state.sheetSectionNodes.reputations.empty,
+    );
+  }
 }
 
 function renderInventory() {
