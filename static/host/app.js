@@ -64,6 +64,22 @@ const messageTemplateSaveBtn = document.getElementById("message-template-save");
 const messageTemplateStatusEl = document.getElementById("message-template-status");
 const messageTemplatesList = document.getElementById("message-templates-list");
 const messageTemplatesCountEl = document.getElementById("message-templates-count");
+const chatSummaryEl = document.getElementById("chat-summary");
+const chatContactNameInput = document.getElementById("chat-contact-name");
+const chatContactPayloadInput = document.getElementById("chat-contact-payload");
+const chatContactAddBtn = document.getElementById("chat-contact-add");
+const chatContactStatusEl = document.getElementById("chat-contact-status");
+const chatContactsList = document.getElementById("chat-contacts-list");
+const chatThreadsList = document.getElementById("chat-threads-list");
+const chatActiveTitle = document.getElementById("chat-active-title");
+const chatMessagesList = document.getElementById("chat-messages");
+const chatMessageText = document.getElementById("chat-message-text");
+const chatMessageSendBtn = document.getElementById("chat-message-send");
+const chatMessageStatusEl = document.getElementById("chat-message-status");
+const chatLinkTypeSelect = document.getElementById("chat-link-type");
+const chatLinkEntitySelect = document.getElementById("chat-link-entity");
+const chatLinkAddBtn = document.getElementById("chat-link-add");
+const chatLinksList = document.getElementById("chat-links-list");
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -121,6 +137,12 @@ const state = {
   sheetSectionsKey: "",
   sheetSectionNodes: {},
   sheetSettingsKey: "",
+  contacts: {},
+  chats: {},
+  friendRequests: {},
+  linkables: { npcs: [], quests: [], items: [] },
+  selectedChatId: null,
+  pendingChatLinks: [],
 };
 
 function setStatus(message, variant = "") {
@@ -194,8 +216,78 @@ function setMessageTemplateStatus(message, variant = "") {
   }
 }
 
+function setChatContactStatus(message, variant = "") {
+  if (!chatContactStatusEl) {
+    return;
+  }
+  chatContactStatusEl.textContent = message;
+  chatContactStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    chatContactStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setChatMessageStatus(message, variant = "") {
+  if (!chatMessageStatusEl) {
+    return;
+  }
+  chatMessageStatusEl.textContent = message;
+  chatMessageStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    chatMessageStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
 function getSelectedClassId() {
   return rulesClassSelect?.value || state.character?.class_id || "";
+}
+
+function getContactLabel(contactId) {
+  if (!contactId) {
+    return "—";
+  }
+  return state.contacts?.[contactId]?.display_name || contactId;
+}
+
+function formatChatTimestamp(timestamp) {
+  if (!timestamp) {
+    return "";
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleString("ru", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
+function getPendingRequest(contactId) {
+  return Object.values(state.friendRequests || {}).find(
+    (request) => request.contact_id === contactId && !request.accepted,
+  );
+}
+
+function getChatByContact(contactId) {
+  return Object.values(state.chats || {}).find((chat) => chat.contact_id === contactId);
+}
+
+function ensureChatThread(chatId) {
+  if (!state.chats[chatId]) {
+    state.chats[chatId] = {
+      id: chatId,
+      contact_id: "",
+      opened: false,
+      messages: [],
+    };
+  }
+  if (!state.chats[chatId].messages) {
+    state.chats[chatId].messages = [];
+  }
+  return state.chats[chatId];
 }
 
 function setupTabs() {
@@ -763,6 +855,73 @@ function applyMessageTemplateUpserted(payload) {
   renderMessageTemplates();
 }
 
+function applyChatContactAdded(payload) {
+  const contactId = payload?.contact_id;
+  if (!contactId) {
+    return;
+  }
+  const displayName = payload.display_name || payload.contact?.display_name || contactId;
+  state.contacts[contactId] = {
+    id: contactId,
+    display_name: displayName,
+    link_payload: payload.link_payload || payload.contact?.link_payload || {},
+  };
+  if (!state.linkables.npcs.some((npc) => npc.id === contactId)) {
+    state.linkables.npcs.push({ type: "npc", id: contactId, label: displayName });
+  }
+}
+
+function applyChatFriendRequestSent(payload) {
+  const requestId = payload?.request_id;
+  const contactId = payload?.contact_id;
+  if (!requestId || !contactId) {
+    return;
+  }
+  state.friendRequests[requestId] = {
+    id: requestId,
+    contact_id: contactId,
+    created_at: payload.created_at || new Date().toISOString(),
+    accepted: false,
+    accepted_at: null,
+  };
+}
+
+function applyChatFriendRequestAccepted(payload) {
+  const requestId = payload?.request_id;
+  const contactId = payload?.contact_id;
+  const chatId = payload?.chat_id;
+  if (requestId && state.friendRequests[requestId]) {
+    state.friendRequests[requestId].accepted = true;
+    state.friendRequests[requestId].accepted_at = payload.accepted_at || new Date().toISOString();
+  }
+  if (chatId) {
+    const chat = ensureChatThread(chatId);
+    chat.contact_id = contactId || chat.contact_id;
+    chat.opened = true;
+  }
+}
+
+function applyChatMessage(event) {
+  const payload = event.payload || {};
+  const chatId = payload.chat_id;
+  if (!chatId) {
+    return;
+  }
+  const chat = ensureChatThread(chatId);
+  const messageId = payload.message_id || `${chatId}-${event.ts || Date.now()}`;
+  if (chat.messages?.some((message) => message.id === messageId)) {
+    return;
+  }
+  chat.messages.push({
+    id: messageId,
+    chat_id: chatId,
+    sender_contact_id: payload.sender_contact_id || "",
+    text: payload.text || "",
+    created_at: event.ts || new Date().toISOString(),
+    links: payload.links || [],
+  });
+}
+
 function applyEvent(event) {
   switch (event.kind) {
     case "xp.granted":
@@ -826,6 +985,18 @@ function applyEvent(event) {
     case "message.template.upserted":
       applyMessageTemplateUpserted(event.payload);
       break;
+    case "chat.contact.added":
+      applyChatContactAdded(event.payload);
+      break;
+    case "chat.friend_request.sent":
+      applyChatFriendRequestSent(event.payload);
+      break;
+    case "chat.friend_request.accepted":
+      applyChatFriendRequestAccepted(event.payload);
+      break;
+    case "chat.message":
+      applyChatMessage(event);
+      break;
     default:
       break;
   }
@@ -849,6 +1020,11 @@ function applySnapshot(snapshot) {
   state.abilities = snapshot.abilities || {};
   state.systemMessages = snapshot.system_messages || [];
   state.settings = snapshot.settings || null;
+  state.contacts = snapshot.contacts || {};
+  state.chats = snapshot.chats || {};
+  state.friendRequests = snapshot.friend_requests || {};
+  state.selectedChatId = null;
+  state.pendingChatLinks = [];
   state.eventLog = [];
   state.eventSeqs = new Set();
   state.classOptionsKey = "";
@@ -861,6 +1037,11 @@ function applySnapshot(snapshot) {
   if (!state.character?.inventory) {
     state.character.inventory = {};
   }
+  Object.values(state.chats || {}).forEach((chat) => {
+    if (!chat.messages) {
+      chat.messages = [];
+    }
+  });
   if (state.selectedItemId && !state.character.inventory[state.selectedItemId]) {
     state.selectedItemId = null;
   }
@@ -928,11 +1109,31 @@ async function fetchSnapshot() {
     const payload = await response.json();
     saveToken(token);
     applySnapshot(payload.snapshot || {});
+    await fetchLinkables();
     await fetchEventLog(0);
     connectEventStream(token, payload.last_seq ?? 0);
   } catch (error) {
     setStatus(error.message, "error");
   }
+}
+
+async function fetchLinkables() {
+  const token = getToken();
+  if (!token) {
+    return;
+  }
+  try {
+    const response = await fetch("/api/host/linkables", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new Error("Не удалось загрузить linkables");
+    }
+    state.linkables = (await response.json()) || { npcs: [], quests: [], items: [] };
+  } catch (error) {
+    console.error(error);
+  }
+  renderChatLinkables();
 }
 
 function findTemplateForItem(itemId) {
@@ -1683,6 +1884,266 @@ function renderMessages() {
   });
 }
 
+function renderChatLinkables() {
+  if (!chatLinkTypeSelect || !chatLinkEntitySelect) {
+    return;
+  }
+  const type = chatLinkTypeSelect.value;
+  const catalog =
+    type === "npc"
+      ? state.linkables.npcs
+      : type === "quest"
+        ? state.linkables.quests
+        : state.linkables.items;
+  chatLinkEntitySelect.innerHTML = "";
+  if (!catalog?.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Нет доступных сущностей";
+    chatLinkEntitySelect.appendChild(option);
+    return;
+  }
+  catalog.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.label || item.id;
+    chatLinkEntitySelect.appendChild(option);
+  });
+}
+
+function renderPendingChatLinks() {
+  if (!chatLinksList) {
+    return;
+  }
+  chatLinksList.innerHTML = "";
+  if (!state.pendingChatLinks.length) {
+    const empty = document.createElement("div");
+    empty.className = "meta";
+    empty.textContent = "Ссылок нет.";
+    chatLinksList.appendChild(empty);
+    return;
+  }
+  state.pendingChatLinks.forEach((link, index) => {
+    const item = document.createElement("div");
+    item.className = "chat-links__item";
+    item.textContent = `${link.label} (${link.type})`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost";
+    button.textContent = "Удалить";
+    button.addEventListener("click", () => {
+      state.pendingChatLinks.splice(index, 1);
+      renderPendingChatLinks();
+    });
+    item.appendChild(button);
+    chatLinksList.appendChild(item);
+  });
+}
+
+function renderChatContacts() {
+  if (!chatContactsList) {
+    return;
+  }
+  chatContactsList.innerHTML = "";
+  const contacts = Object.values(state.contacts || {});
+  if (!contacts.length) {
+    const empty = document.createElement("div");
+    empty.className = "list__item";
+    empty.textContent = "Контактов пока нет.";
+    chatContactsList.appendChild(empty);
+    return;
+  }
+  contacts
+    .sort((a, b) => (a.display_name || "").localeCompare(b.display_name || "", "ru"))
+    .forEach((contact) => {
+      const row = document.createElement("div");
+      row.className = "list-row";
+      const info = document.createElement("div");
+      info.className = "list-row__info";
+      const title = document.createElement("div");
+      title.textContent = contact.display_name || contact.id;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+
+      const openChat = getChatByContact(contact.id);
+      const pending = getPendingRequest(contact.id);
+      if (openChat?.opened) {
+        meta.textContent = `Чат открыт · ${openChat.id}`;
+      } else if (pending) {
+        meta.textContent = `Заявка отправлена · ${pending.id}`;
+      } else {
+        meta.textContent = "Чат ещё не открыт";
+      }
+
+      info.appendChild(title);
+      info.appendChild(meta);
+
+      const actions = document.createElement("div");
+      if (openChat) {
+        const openBtn = document.createElement("button");
+        openBtn.type = "button";
+        openBtn.className = "ghost";
+        openBtn.textContent = "Открыть";
+        openBtn.addEventListener("click", () => {
+          state.selectedChatId = openChat.id;
+          state.pendingChatLinks = [];
+          renderChat();
+        });
+        actions.appendChild(openBtn);
+      } else if (!pending) {
+        const requestBtn = document.createElement("button");
+        requestBtn.type = "button";
+        requestBtn.className = "ghost";
+        requestBtn.textContent = "Отправить заявку";
+        requestBtn.addEventListener("click", () => sendFriendRequest(contact.id, requestBtn));
+        actions.appendChild(requestBtn);
+      }
+
+      row.appendChild(info);
+      row.appendChild(actions);
+      chatContactsList.appendChild(row);
+    });
+}
+
+function renderChatThreads() {
+  if (!chatThreadsList) {
+    return;
+  }
+  chatThreadsList.innerHTML = "";
+  const chats = Object.values(state.chats || {});
+  if (!chats.length) {
+    const empty = document.createElement("div");
+    empty.className = "list__item";
+    empty.textContent = "Чатов пока нет.";
+    chatThreadsList.appendChild(empty);
+    return;
+  }
+  chats
+    .sort((a, b) => {
+      const nameA = getContactLabel(a.contact_id);
+      const nameB = getContactLabel(b.contact_id);
+      return nameA.localeCompare(nameB, "ru");
+    })
+    .forEach((chat) => {
+      const row = document.createElement("div");
+      row.className = "chat-thread";
+      if (chat.id === state.selectedChatId) {
+        row.classList.add("active");
+      }
+      const meta = document.createElement("div");
+      meta.className = "chat-thread__meta";
+      const title = document.createElement("div");
+      title.className = "chat-thread__title";
+      title.textContent = getContactLabel(chat.contact_id);
+      const status = document.createElement("div");
+      status.className = "chat-thread__status";
+      status.textContent = chat.opened ? "Открыт" : "Ожидает принятия";
+      meta.appendChild(title);
+      meta.appendChild(status);
+      row.appendChild(meta);
+
+      row.addEventListener("click", () => {
+        state.selectedChatId = chat.id;
+        state.pendingChatLinks = [];
+        renderChat();
+      });
+
+      chatThreadsList.appendChild(row);
+    });
+}
+
+function renderChatMessages() {
+  if (!chatMessagesList) {
+    return;
+  }
+  chatMessagesList.innerHTML = "";
+  const chat = state.selectedChatId ? state.chats?.[state.selectedChatId] : null;
+  if (!chat) {
+    const empty = document.createElement("div");
+    empty.className = "meta";
+    empty.textContent = "Выберите чат для просмотра сообщений.";
+    chatMessagesList.appendChild(empty);
+    return;
+  }
+  const messages = chat.messages || [];
+  if (!messages.length) {
+    const empty = document.createElement("div");
+    empty.className = "meta";
+    empty.textContent = "Сообщений пока нет.";
+    chatMessagesList.appendChild(empty);
+    return;
+  }
+  messages.forEach((message) => {
+    const item = document.createElement("div");
+    item.className = "chat-message";
+
+    const meta = document.createElement("div");
+    meta.className = "chat-message__meta";
+    const sender = document.createElement("div");
+    sender.className = "chat-message__sender";
+    if (message.sender_contact_id === state.character?.id) {
+      sender.textContent = "Игрок";
+    } else {
+      sender.textContent = getContactLabel(message.sender_contact_id);
+    }
+    const time = document.createElement("div");
+    time.textContent = formatChatTimestamp(message.created_at);
+    meta.appendChild(sender);
+    meta.appendChild(time);
+
+    const text = document.createElement("div");
+    text.className = "chat-message__text";
+    text.textContent = message.text || "";
+
+    item.appendChild(meta);
+    item.appendChild(text);
+
+    if (message.links?.length) {
+      const links = document.createElement("div");
+      links.className = "chat-message__links";
+      message.links.forEach((link) => {
+        const tag = document.createElement("div");
+        tag.className = "chat-link-tag";
+        tag.textContent = `${link.title || link.label || link.id} (${link.kind || link.type})`;
+        links.appendChild(tag);
+      });
+      item.appendChild(links);
+    }
+
+    chatMessagesList.appendChild(item);
+  });
+  chatMessagesList.scrollTop = chatMessagesList.scrollHeight;
+}
+
+function renderChat() {
+  if (!chatSummaryEl) {
+    return;
+  }
+  chatSummaryEl.textContent = `Контактов: ${Object.keys(state.contacts || {}).length} · Чатов: ${
+    Object.keys(state.chats || {}).length
+  }`;
+  renderChatContacts();
+  renderChatThreads();
+  renderChatMessages();
+  renderChatLinkables();
+  renderPendingChatLinks();
+  if (chatActiveTitle) {
+    const chat = state.selectedChatId ? state.chats?.[state.selectedChatId] : null;
+    chatActiveTitle.textContent = chat
+      ? `Чат: ${getContactLabel(chat.contact_id)}`
+      : "Выберите чат";
+  }
+  if (chatMessageText) {
+    chatMessageText.disabled = !state.selectedChatId;
+  }
+  if (chatMessageSendBtn) {
+    chatMessageSendBtn.disabled = !state.selectedChatId;
+  }
+  if (!state.selectedChatId) {
+    setChatMessageStatus("Выберите чат для отправки.");
+  }
+}
+
 function renderItemTemplates() {
   if (!itemTemplatesList) {
     return;
@@ -1828,6 +2289,7 @@ function render() {
   renderQuestGroups();
   renderAbilities();
   renderMessages();
+  renderChat();
   renderLog();
   renderSettings();
   renderItemTemplates();
@@ -2341,6 +2803,162 @@ async function sendMessageTemplate(templateId, button) {
   }
 }
 
+async function addChatContact() {
+  const token = getToken();
+  if (!token) {
+    setChatContactStatus("Укажите токен", "error");
+    return;
+  }
+  const displayName = chatContactNameInput?.value.trim() || "";
+  if (!displayName) {
+    setChatContactStatus("Введите имя контакта", "error");
+    return;
+  }
+  let payload = {};
+  if (chatContactPayloadInput?.value.trim()) {
+    try {
+      payload = JSON.parse(chatContactPayloadInput.value);
+    } catch (error) {
+      setChatContactStatus("Некорректный JSON payload", "error");
+      return;
+    }
+  }
+  chatContactAddBtn.disabled = true;
+  setChatContactStatus("Создание контакта...");
+  try {
+    const response = await fetch("/api/host/contacts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ display_name: displayName, link_payload: payload }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось создать контакт");
+    }
+    const apiPayload = await response.json();
+    applyEvents(apiPayload.events || []);
+    setChatContactStatus("Контакт создан", "ok");
+    chatContactNameInput.value = "";
+    chatContactPayloadInput.value = "";
+    await fetchLinkables();
+  } catch (error) {
+    setChatContactStatus(error.message, "error");
+  } finally {
+    chatContactAddBtn.disabled = false;
+  }
+}
+
+async function sendFriendRequest(contactId, button) {
+  const token = getToken();
+  if (!token) {
+    setChatContactStatus("Укажите токен", "error");
+    return;
+  }
+  if (!contactId) {
+    setChatContactStatus("Контакт не выбран", "error");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+  }
+  setChatContactStatus("Отправка заявки...");
+  try {
+    const response = await fetch("/api/host/friend-requests", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ contact_id: contactId }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось отправить заявку");
+    }
+    const apiPayload = await response.json();
+    applyEvents(apiPayload.events || []);
+    setChatContactStatus("Заявка отправлена", "ok");
+  } catch (error) {
+    setChatContactStatus(error.message, "error");
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+function addChatLink() {
+  if (!chatLinkTypeSelect || !chatLinkEntitySelect) {
+    return;
+  }
+  const type = chatLinkTypeSelect.value;
+  const selectedId = chatLinkEntitySelect.value;
+  if (!selectedId) {
+    setChatMessageStatus("Сущность для ссылки не выбрана", "error");
+    return;
+  }
+  const selectedOption = chatLinkEntitySelect.selectedOptions?.[0];
+  const label = selectedOption?.textContent || selectedId;
+  state.pendingChatLinks.push({ type, id: selectedId, label });
+  renderPendingChatLinks();
+}
+
+async function sendChatMessage() {
+  const token = getToken();
+  if (!token) {
+    setChatMessageStatus("Укажите токен", "error");
+    return;
+  }
+  const chatId = state.selectedChatId;
+  if (!chatId) {
+    setChatMessageStatus("Выберите чат", "error");
+    return;
+  }
+  const chat = state.chats?.[chatId];
+  const text = chatMessageText?.value.trim() || "";
+  if (!text) {
+    setChatMessageStatus("Введите сообщение", "error");
+    return;
+  }
+  if (!chat?.contact_id) {
+    setChatMessageStatus("Контакт для чата не найден", "error");
+    return;
+  }
+  chatMessageSendBtn.disabled = true;
+  setChatMessageStatus("Отправка...");
+  try {
+    const response = await fetch(`/api/host/chats/${chatId}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        text,
+        sender_contact_id: chat.contact_id,
+        links: state.pendingChatLinks,
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось отправить сообщение");
+    }
+    const apiPayload = await response.json();
+    applyEvents(apiPayload.events || []);
+    setChatMessageStatus("Сообщение отправлено", "ok");
+    chatMessageText.value = "";
+    state.pendingChatLinks = [];
+    renderPendingChatLinks();
+  } catch (error) {
+    setChatMessageStatus(error.message, "error");
+  } finally {
+    chatMessageSendBtn.disabled = false;
+  }
+}
+
 connectBtn.addEventListener("click", fetchSnapshot);
 refreshBtn.addEventListener("click", fetchSnapshot);
 
@@ -2408,6 +3026,22 @@ if (itemTemplateSaveBtn) {
 
 if (messageTemplateSaveBtn) {
   messageTemplateSaveBtn.addEventListener("click", upsertMessageTemplate);
+}
+
+if (chatContactAddBtn) {
+  chatContactAddBtn.addEventListener("click", addChatContact);
+}
+
+if (chatLinkTypeSelect) {
+  chatLinkTypeSelect.addEventListener("change", renderChatLinkables);
+}
+
+if (chatLinkAddBtn) {
+  chatLinkAddBtn.addEventListener("click", addChatLink);
+}
+
+if (chatMessageSendBtn) {
+  chatMessageSendBtn.addEventListener("click", sendChatMessage);
 }
 
 const storedToken = localStorage.getItem("hostToken");
