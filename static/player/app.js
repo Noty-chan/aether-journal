@@ -26,6 +26,7 @@ const messagesList = document.getElementById("system-messages");
 const messagesCountEl = document.getElementById("messages-count");
 const logList = document.getElementById("event-log");
 const logCountEl = document.getElementById("log-count");
+const questSearchInput = document.getElementById("quest-search");
 const chatSummaryEl = document.getElementById("chat-summary");
 const chatThreadsList = document.getElementById("chat-threads-list");
 const chatActiveTitle = document.getElementById("chat-active-title");
@@ -37,6 +38,16 @@ const chatLinkTypeSelect = document.getElementById("chat-link-type");
 const chatLinkEntitySelect = document.getElementById("chat-link-entity");
 const chatLinkAddBtn = document.getElementById("chat-link-add");
 const chatLinksList = document.getElementById("chat-links-list");
+const soundMasterInput = document.getElementById("sound-master");
+const soundInfoInput = document.getElementById("sound-info");
+const soundWarningInput = document.getElementById("sound-warning");
+const soundAlertInput = document.getElementById("sound-alert");
+const soundLevelUpInput = document.getElementById("sound-level-up");
+const soundMasterValue = document.getElementById("sound-master-value");
+const soundInfoValue = document.getElementById("sound-info-value");
+const soundWarningValue = document.getElementById("sound-warning-value");
+const soundAlertValue = document.getElementById("sound-alert-value");
+const soundLevelUpValue = document.getElementById("sound-level-up-value");
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -69,6 +80,16 @@ const DEFAULT_SHEET_SECTIONS = [
   { key: "reputations", title: "Репутации", visible: true, order: 4 },
 ];
 
+const DEFAULT_AUDIO_SETTINGS = {
+  master: 1,
+  info: 0.8,
+  warning: 0.9,
+  alert: 1,
+  level_up: 1,
+};
+
+const AUDIO_SETTINGS_KEY = "playerAudioSettings";
+
 const state = {
   contacts: {},
   chats: {},
@@ -81,6 +102,7 @@ const state = {
   templates: {},
   messageTemplates: {},
   questTemplates: {},
+  questQuery: "",
   activeQuests: [],
   abilityCategories: {},
   abilities: {},
@@ -90,6 +112,7 @@ const state = {
   messageCollapsed: {},
   playedMessageIds: new Set(),
   audioContext: null,
+  audioSettings: { ...DEFAULT_AUDIO_SETTINGS },
   eventLog: [],
   eventSeqs: new Set(),
   sheetSectionsKey: "",
@@ -146,6 +169,65 @@ function setupTabs() {
   activate("sheet");
 }
 
+function clampVolume(value, fallback) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return fallback;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+function loadAudioSettings() {
+  const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
+  if (!raw) {
+    return { ...DEFAULT_AUDIO_SETTINGS };
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      master: clampVolume(parsed.master, DEFAULT_AUDIO_SETTINGS.master),
+      info: clampVolume(parsed.info, DEFAULT_AUDIO_SETTINGS.info),
+      warning: clampVolume(parsed.warning, DEFAULT_AUDIO_SETTINGS.warning),
+      alert: clampVolume(parsed.alert, DEFAULT_AUDIO_SETTINGS.alert),
+      level_up: clampVolume(parsed.level_up, DEFAULT_AUDIO_SETTINGS.level_up),
+    };
+  } catch (error) {
+    return { ...DEFAULT_AUDIO_SETTINGS };
+  }
+}
+
+function saveAudioSettings() {
+  localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(state.audioSettings));
+}
+
+function updateAudioValue(input, valueEl, value) {
+  if (!input || !valueEl) {
+    return;
+  }
+  const percent = Math.round(value * 100);
+  input.value = `${percent}`;
+  valueEl.textContent = `${percent}%`;
+}
+
+function syncAudioControls() {
+  updateAudioValue(soundMasterInput, soundMasterValue, state.audioSettings.master);
+  updateAudioValue(soundInfoInput, soundInfoValue, state.audioSettings.info);
+  updateAudioValue(soundWarningInput, soundWarningValue, state.audioSettings.warning);
+  updateAudioValue(soundAlertInput, soundAlertValue, state.audioSettings.alert);
+  updateAudioValue(soundLevelUpInput, soundLevelUpValue, state.audioSettings.level_up);
+}
+
+function bindAudioControl(input, key) {
+  if (!input) {
+    return;
+  }
+  input.addEventListener("input", () => {
+    const value = clampVolume(Number(input.value) / 100, state.audioSettings[key]);
+    state.audioSettings[key] = value;
+    syncAudioControls();
+    saveAudioSettings();
+  });
+}
+
 function ensureAudioContext() {
   if (!state.audioContext) {
     state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -193,7 +275,13 @@ function ensureChatThread(chatId) {
   return state.chats[chatId];
 }
 
-function playTone(frequency, duration = 0.25, type = "sine", gainValue = 0.04) {
+function playTone(
+  frequency,
+  duration = 0.25,
+  type = "sine",
+  gainValue = 0.04,
+  volume = 1,
+) {
   if (!state.audioContext) {
     return;
   }
@@ -202,20 +290,20 @@ function playTone(frequency, duration = 0.25, type = "sine", gainValue = 0.04) {
   const gain = ctx.createGain();
   oscillator.type = type;
   oscillator.frequency.value = frequency;
-  gain.gain.value = gainValue;
+  gain.gain.value = gainValue * volume;
   oscillator.connect(gain);
   gain.connect(ctx.destination);
   oscillator.start();
   oscillator.stop(ctx.currentTime + duration);
 }
 
-function playLevelUpEffect() {
+function playLevelUpEffect(volume = 1) {
   if (!state.audioContext) {
     return;
   }
   const notes = [523.25, 659.25, 783.99, 1046.5];
   notes.forEach((freq, index) => {
-    setTimeout(() => playTone(freq, 0.18, "triangle", 0.06), index * 140);
+    setTimeout(() => playTone(freq, 0.18, "triangle", 0.06, volume), index * 140);
   });
 }
 
@@ -227,16 +315,31 @@ function playMessageSound(message) {
   if (!state.audioContext) {
     return;
   }
+  const masterVolume = state.audioSettings.master ?? 1;
   if (message.effect === "level_up") {
-    playLevelUpEffect();
+    const levelVolume = (state.audioSettings.level_up ?? 1) * masterVolume;
+    if (levelVolume > 0) {
+      playLevelUpEffect(levelVolume);
+    }
   } else {
     const sound = message.sound || message.severity || "info";
+    const categoryVolume =
+      sound === "alert"
+        ? state.audioSettings.alert ?? 1
+        : sound === "warning"
+          ? state.audioSettings.warning ?? 1
+          : state.audioSettings.info ?? 1;
+    const volume = categoryVolume * masterVolume;
+    if (volume <= 0) {
+      state.playedMessageIds.add(message.id);
+      return;
+    }
     if (sound === "alert") {
-      playTone(740, 0.25, "square", 0.05);
+      playTone(740, 0.25, "square", 0.05, volume);
     } else if (sound === "warning") {
-      playTone(520, 0.25, "sawtooth", 0.04);
+      playTone(520, 0.25, "sawtooth", 0.04, volume);
     } else {
-      playTone(440, 0.18, "sine", 0.03);
+      playTone(440, 0.18, "sine", 0.03, volume);
     }
   }
   state.playedMessageIds.add(message.id);
@@ -1441,13 +1544,40 @@ function formatObjective(obj) {
   return obj.text || "";
 }
 
+function normalizeSearch(value) {
+  return (value || "").toString().trim().toLowerCase();
+}
+
+function questMatchesFilter(quest, template, query) {
+  const normalized = normalizeSearch(query);
+  if (!normalized) {
+    return true;
+  }
+  const objectives = (quest.objectives || [])
+    .map((obj) => obj.text)
+    .filter(Boolean)
+    .join(" ");
+  const haystack = normalizeSearch(
+    [template?.name, template?.description, objectives].join(" "),
+  );
+  return haystack.includes(normalized);
+}
+
 function renderQuestGroups() {
   if (!questStatusGroups) {
     return;
   }
   questStatusGroups.innerHTML = "";
   const quests = state.activeQuests || [];
-  const grouped = quests.reduce((acc, quest) => {
+  const filtered = quests.filter((quest) =>
+    questMatchesFilter(quest, state.questTemplates?.[quest.template_id], state.questQuery),
+  );
+  if (questCountEl) {
+    questCountEl.textContent = state.questQuery
+      ? `${filtered.length} / ${quests.length}`
+      : `${quests.length}`;
+  }
+  const grouped = filtered.reduce((acc, quest) => {
     const status = quest.status || "active";
     if (!acc[status]) {
       acc[status] = [];
@@ -2085,9 +2215,14 @@ function render() {
   renderMessages();
   renderChat();
   renderLog();
-  if (questCountEl) {
-    questCountEl.textContent = `${state.activeQuests?.length || 0}`;
+}
+
+function updateQuestFilter() {
+  if (!questSearchInput) {
+    return;
   }
+  state.questQuery = questSearchInput.value;
+  renderQuestGroups();
 }
 
 async function acceptRequest(requestId, button) {
@@ -2292,6 +2427,18 @@ if (chatLinkAddBtn) {
 if (chatMessageSendBtn) {
   chatMessageSendBtn.addEventListener("click", sendChatMessage);
 }
+
+if (questSearchInput) {
+  questSearchInput.addEventListener("input", updateQuestFilter);
+}
+
+state.audioSettings = loadAudioSettings();
+syncAudioControls();
+bindAudioControl(soundMasterInput, "master");
+bindAudioControl(soundInfoInput, "info");
+bindAudioControl(soundWarningInput, "warning");
+bindAudioControl(soundAlertInput, "alert");
+bindAudioControl(soundLevelUpInput, "level_up");
 
 tokenInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {

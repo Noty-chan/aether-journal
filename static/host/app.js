@@ -52,6 +52,12 @@ const itemTemplateSlotsInput = document.getElementById("item-template-slots");
 const itemTemplateStatModsInput = document.getElementById("item-template-stat-mods");
 const itemTemplateTagsInput = document.getElementById("item-template-tags");
 const itemTemplateTwoHandedInput = document.getElementById("item-template-two-handed");
+const itemTemplateSearchInput = document.getElementById("item-template-search");
+const itemTemplateFilterTypeSelect = document.getElementById("item-template-filter-type");
+const itemTemplateFilterRaritySelect = document.getElementById("item-template-filter-rarity");
+const itemTemplateFilterTwoHandedInput = document.getElementById(
+  "item-template-filter-two-handed",
+);
 const itemTemplateSaveBtn = document.getElementById("item-template-save");
 const itemTemplateStatusEl = document.getElementById("item-template-status");
 const itemTemplatesList = document.getElementById("item-templates-list");
@@ -67,6 +73,8 @@ const messageTemplateSaveBtn = document.getElementById("message-template-save");
 const messageTemplateStatusEl = document.getElementById("message-template-status");
 const messageTemplatesList = document.getElementById("message-templates-list");
 const messageTemplatesCountEl = document.getElementById("message-templates-count");
+const questTemplateSearchInput = document.getElementById("quest-template-search");
+const questTemplatesCountEl = document.getElementById("quest-templates-count");
 const chatSummaryEl = document.getElementById("chat-summary");
 const chatContactNameInput = document.getElementById("chat-contact-name");
 const chatContactPayloadInput = document.getElementById("chat-contact-payload");
@@ -83,6 +91,16 @@ const chatLinkTypeSelect = document.getElementById("chat-link-type");
 const chatLinkEntitySelect = document.getElementById("chat-link-entity");
 const chatLinkAddBtn = document.getElementById("chat-link-add");
 const chatLinksList = document.getElementById("chat-links-list");
+const soundMasterInput = document.getElementById("sound-master");
+const soundInfoInput = document.getElementById("sound-info");
+const soundWarningInput = document.getElementById("sound-warning");
+const soundAlertInput = document.getElementById("sound-alert");
+const soundLevelUpInput = document.getElementById("sound-level-up");
+const soundMasterValue = document.getElementById("sound-master-value");
+const soundInfoValue = document.getElementById("sound-info-value");
+const soundWarningValue = document.getElementById("sound-warning-value");
+const soundAlertValue = document.getElementById("sound-alert-value");
+const soundLevelUpValue = document.getElementById("sound-level-up-value");
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -115,6 +133,16 @@ const DEFAULT_SHEET_SECTIONS = [
   { key: "reputations", title: "Репутации", visible: true, order: 4 },
 ];
 
+const DEFAULT_AUDIO_SETTINGS = {
+  master: 1,
+  info: 0.8,
+  warning: 0.9,
+  alert: 1,
+  level_up: 1,
+};
+
+const AUDIO_SETTINGS_KEY = "hostAudioSettings";
+
 const state = {
   token: "",
   snapshot: null,
@@ -124,6 +152,13 @@ const state = {
   templates: {},
   messageTemplates: {},
   questTemplates: {},
+  itemTemplateFilters: {
+    query: "",
+    type: "",
+    rarity: "",
+    twoHanded: false,
+  },
+  questTemplateQuery: "",
   activeQuests: [],
   abilityCategories: {},
   abilities: {},
@@ -134,6 +169,7 @@ const state = {
   messageCollapsed: {},
   playedMessageIds: new Set(),
   audioContext: null,
+  audioSettings: { ...DEFAULT_AUDIO_SETTINGS },
   eventLog: [],
   eventSeqs: new Set(),
   classOptionsKey: "",
@@ -321,6 +357,65 @@ function setupTabs() {
   activate("sheet");
 }
 
+function clampVolume(value, fallback) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return fallback;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+function loadAudioSettings() {
+  const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
+  if (!raw) {
+    return { ...DEFAULT_AUDIO_SETTINGS };
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      master: clampVolume(parsed.master, DEFAULT_AUDIO_SETTINGS.master),
+      info: clampVolume(parsed.info, DEFAULT_AUDIO_SETTINGS.info),
+      warning: clampVolume(parsed.warning, DEFAULT_AUDIO_SETTINGS.warning),
+      alert: clampVolume(parsed.alert, DEFAULT_AUDIO_SETTINGS.alert),
+      level_up: clampVolume(parsed.level_up, DEFAULT_AUDIO_SETTINGS.level_up),
+    };
+  } catch (error) {
+    return { ...DEFAULT_AUDIO_SETTINGS };
+  }
+}
+
+function saveAudioSettings() {
+  localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(state.audioSettings));
+}
+
+function updateAudioValue(input, valueEl, value) {
+  if (!input || !valueEl) {
+    return;
+  }
+  const percent = Math.round(value * 100);
+  input.value = `${percent}`;
+  valueEl.textContent = `${percent}%`;
+}
+
+function syncAudioControls() {
+  updateAudioValue(soundMasterInput, soundMasterValue, state.audioSettings.master);
+  updateAudioValue(soundInfoInput, soundInfoValue, state.audioSettings.info);
+  updateAudioValue(soundWarningInput, soundWarningValue, state.audioSettings.warning);
+  updateAudioValue(soundAlertInput, soundAlertValue, state.audioSettings.alert);
+  updateAudioValue(soundLevelUpInput, soundLevelUpValue, state.audioSettings.level_up);
+}
+
+function bindAudioControl(input, key) {
+  if (!input) {
+    return;
+  }
+  input.addEventListener("input", () => {
+    const value = clampVolume(Number(input.value) / 100, state.audioSettings[key]);
+    state.audioSettings[key] = value;
+    syncAudioControls();
+    saveAudioSettings();
+  });
+}
+
 function ensureAudioContext() {
   if (!state.audioContext) {
     state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -330,7 +425,13 @@ function ensureAudioContext() {
   }
 }
 
-function playTone(frequency, duration = 0.25, type = "sine", gainValue = 0.04) {
+function playTone(
+  frequency,
+  duration = 0.25,
+  type = "sine",
+  gainValue = 0.04,
+  volume = 1,
+) {
   if (!state.audioContext) {
     return;
   }
@@ -339,20 +440,20 @@ function playTone(frequency, duration = 0.25, type = "sine", gainValue = 0.04) {
   const gain = ctx.createGain();
   oscillator.type = type;
   oscillator.frequency.value = frequency;
-  gain.gain.value = gainValue;
+  gain.gain.value = gainValue * volume;
   oscillator.connect(gain);
   gain.connect(ctx.destination);
   oscillator.start();
   oscillator.stop(ctx.currentTime + duration);
 }
 
-function playLevelUpEffect() {
+function playLevelUpEffect(volume = 1) {
   if (!state.audioContext) {
     return;
   }
   const notes = [523.25, 659.25, 783.99, 1046.5];
   notes.forEach((freq, index) => {
-    setTimeout(() => playTone(freq, 0.18, "triangle", 0.06), index * 140);
+    setTimeout(() => playTone(freq, 0.18, "triangle", 0.06, volume), index * 140);
   });
 }
 
@@ -364,16 +465,31 @@ function playMessageSound(message) {
   if (!state.audioContext) {
     return;
   }
+  const masterVolume = state.audioSettings.master ?? 1;
   if (message.effect === "level_up") {
-    playLevelUpEffect();
+    const levelVolume = (state.audioSettings.level_up ?? 1) * masterVolume;
+    if (levelVolume > 0) {
+      playLevelUpEffect(levelVolume);
+    }
   } else {
     const sound = message.sound || message.severity || "info";
+    const categoryVolume =
+      sound === "alert"
+        ? state.audioSettings.alert ?? 1
+        : sound === "warning"
+          ? state.audioSettings.warning ?? 1
+          : state.audioSettings.info ?? 1;
+    const volume = categoryVolume * masterVolume;
+    if (volume <= 0) {
+      state.playedMessageIds.add(message.id);
+      return;
+    }
     if (sound === "alert") {
-      playTone(740, 0.25, "square", 0.05);
+      playTone(740, 0.25, "square", 0.05, volume);
     } else if (sound === "warning") {
-      playTone(520, 0.25, "sawtooth", 0.04);
+      playTone(520, 0.25, "sawtooth", 0.04, volume);
     } else {
-      playTone(440, 0.18, "sine", 0.03);
+      playTone(440, 0.18, "sine", 0.03, volume);
     }
   }
   state.playedMessageIds.add(message.id);
@@ -411,6 +527,46 @@ function formatTimestamp(ts) {
 function getSlotLabel(slot) {
   const found = EQUIPMENT_SLOTS.find((item) => item.key === slot);
   return found ? found.label : slot || "—";
+}
+
+function normalizeSearch(value) {
+  return (value || "").toString().trim().toLowerCase();
+}
+
+function itemTemplateMatches(template, filters) {
+  if (!template) {
+    return false;
+  }
+  if (filters.type && template.item_type !== filters.type) {
+    return false;
+  }
+  if (filters.rarity && template.rarity !== filters.rarity) {
+    return false;
+  }
+  if (filters.twoHanded && !template.two_handed) {
+    return false;
+  }
+  const query = normalizeSearch(filters.query);
+  if (!query) {
+    return true;
+  }
+  const tags = Array.isArray(template.tags) ? template.tags.join(" ") : template.tags || "";
+  const haystack = normalizeSearch(
+    [template.name, template.description, template.item_type, template.rarity, tags].join(" "),
+  );
+  return haystack.includes(query);
+}
+
+function questTemplateMatches(template, query) {
+  if (!template) {
+    return false;
+  }
+  const normalized = normalizeSearch(query);
+  if (!normalized) {
+    return true;
+  }
+  const haystack = normalizeSearch([template.name, template.description].join(" "));
+  return haystack.includes(normalized);
 }
 
 function describeEvent(event) {
@@ -1622,10 +1778,25 @@ function renderQuestTemplates() {
   }
   questTemplatesList.innerHTML = "";
   const templates = Object.values(state.questTemplates || {});
+  const filtered = templates.filter((template) =>
+    questTemplateMatches(template, state.questTemplateQuery),
+  );
+  if (questTemplatesCountEl) {
+    questTemplatesCountEl.textContent = state.questTemplateQuery
+      ? `${filtered.length} / ${templates.length}`
+      : `${templates.length}`;
+  }
   if (templates.length === 0) {
     const empty = document.createElement("div");
     empty.className = "list__item";
     empty.textContent = "Нет доступных шаблонов.";
+    questTemplatesList.appendChild(empty);
+    return;
+  }
+  if (filtered.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "list__item";
+    empty.textContent = "Шаблоны не найдены.";
     questTemplatesList.appendChild(empty);
     return;
   }
@@ -1634,7 +1805,7 @@ function renderQuestTemplates() {
       .filter((quest) => quest.status === "active")
       .map((quest) => quest.template_id),
   );
-  templates
+  filtered
     .sort((a, b) => a.name.localeCompare(b.name, "ru"))
     .forEach((template) => {
       const row = document.createElement("div");
@@ -2321,9 +2492,18 @@ function renderItemTemplates() {
     return;
   }
   const templates = Object.values(state.templates || {});
+  const filtered = templates.filter((template) =>
+    itemTemplateMatches(template, state.itemTemplateFilters),
+  );
   itemTemplatesList.innerHTML = "";
   if (itemTemplatesCountEl) {
-    itemTemplatesCountEl.textContent = `${templates.length}`;
+    itemTemplatesCountEl.textContent =
+      state.itemTemplateFilters.query ||
+      state.itemTemplateFilters.type ||
+      state.itemTemplateFilters.rarity ||
+      state.itemTemplateFilters.twoHanded
+        ? `${filtered.length} / ${templates.length}`
+        : `${templates.length}`;
   }
   if (!templates.length) {
     const empty = document.createElement("div");
@@ -2332,7 +2512,14 @@ function renderItemTemplates() {
     itemTemplatesList.appendChild(empty);
     return;
   }
-  templates
+  if (!filtered.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Шаблоны не найдены.";
+    itemTemplatesList.appendChild(empty);
+    return;
+  }
+  filtered
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
     .forEach((template) => {
       const row = document.createElement("div");
@@ -2469,6 +2656,30 @@ function render() {
   if (questCountEl) {
     questCountEl.textContent = `${state.activeQuests?.length || 0}`;
   }
+}
+
+function updateItemTemplateFilters() {
+  if (itemTemplateSearchInput) {
+    state.itemTemplateFilters.query = itemTemplateSearchInput.value;
+  }
+  if (itemTemplateFilterTypeSelect) {
+    state.itemTemplateFilters.type = itemTemplateFilterTypeSelect.value;
+  }
+  if (itemTemplateFilterRaritySelect) {
+    state.itemTemplateFilters.rarity = itemTemplateFilterRaritySelect.value;
+  }
+  if (itemTemplateFilterTwoHandedInput) {
+    state.itemTemplateFilters.twoHanded = itemTemplateFilterTwoHandedInput.checked;
+  }
+  renderItemTemplates();
+}
+
+function updateQuestTemplateFilter() {
+  if (!questTemplateSearchInput) {
+    return;
+  }
+  state.questTemplateQuery = questTemplateSearchInput.value;
+  renderQuestTemplates();
 }
 
 async function assignQuest(templateId, button) {
@@ -3251,8 +3462,28 @@ if (itemTemplateSaveBtn) {
   itemTemplateSaveBtn.addEventListener("click", upsertItemTemplate);
 }
 
+if (itemTemplateSearchInput) {
+  itemTemplateSearchInput.addEventListener("input", updateItemTemplateFilters);
+}
+
+if (itemTemplateFilterTypeSelect) {
+  itemTemplateFilterTypeSelect.addEventListener("change", updateItemTemplateFilters);
+}
+
+if (itemTemplateFilterRaritySelect) {
+  itemTemplateFilterRaritySelect.addEventListener("change", updateItemTemplateFilters);
+}
+
+if (itemTemplateFilterTwoHandedInput) {
+  itemTemplateFilterTwoHandedInput.addEventListener("change", updateItemTemplateFilters);
+}
+
 if (messageTemplateSaveBtn) {
   messageTemplateSaveBtn.addEventListener("click", upsertMessageTemplate);
+}
+
+if (questTemplateSearchInput) {
+  questTemplateSearchInput.addEventListener("input", updateQuestTemplateFilter);
 }
 
 if (chatContactAddBtn) {
@@ -3270,6 +3501,14 @@ if (chatLinkAddBtn) {
 if (chatMessageSendBtn) {
   chatMessageSendBtn.addEventListener("click", sendChatMessage);
 }
+
+state.audioSettings = loadAudioSettings();
+syncAudioControls();
+bindAudioControl(soundMasterInput, "master");
+bindAudioControl(soundInfoInput, "info");
+bindAudioControl(soundWarningInput, "warning");
+bindAudioControl(soundAlertInput, "alert");
+bindAudioControl(soundLevelUpInput, "level_up");
 
 const storedToken = localStorage.getItem("hostToken");
 if (storedToken) {
