@@ -12,6 +12,9 @@ const xpFillEl = document.getElementById("xp-fill");
 const xpInput = document.getElementById("xp-input");
 const xpSubmitBtn = document.getElementById("xp-submit");
 const xpStatusEl = document.getElementById("xp-status");
+const levelUpInput = document.getElementById("level-up-input");
+const levelUpSubmitBtn = document.getElementById("level-up-submit");
+const levelUpStatusEl = document.getElementById("level-up-status");
 const sheetSectionsContainer = document.getElementById("sheet-sections");
 const inventoryList = document.getElementById("inventory-list");
 const inventoryCountEl = document.getElementById("inventory-count");
@@ -158,6 +161,17 @@ function setXpStatus(message, variant = "") {
   xpStatusEl.classList.remove("status--ok", "status--error");
   if (variant) {
     xpStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setLevelUpStatus(message, variant = "") {
+  if (!levelUpStatusEl) {
+    return;
+  }
+  levelUpStatusEl.textContent = message;
+  levelUpStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    levelUpStatusEl.classList.add(`status--${variant}`);
   }
 }
 
@@ -408,6 +422,8 @@ function describeEvent(event) {
       })`;
     case "level.up":
       return `Уровень ${payload.new_level ?? "?"} (+${payload.stat_points_gained ?? 0} оч.)`;
+    case "stat.allocated":
+      return `Распределены очки: ${payload.stat_id || "—"} +${payload.amount ?? 0}`;
     case "inventory.added": {
       const template = state.templates?.[payload.template_id];
       const name = template?.name || payload.template_id || "предмет";
@@ -574,6 +590,10 @@ function applyLevelUpEvent(payload) {
   const gained = Number(payload.stat_points_gained ?? 0);
   state.character.unspent_stat_points =
     Number(state.character.unspent_stat_points ?? 0) + gained;
+  const newLevel = Number(payload.new_level ?? state.character.level ?? 0);
+  if (!Number.isNaN(newLevel) && newLevel > Number(state.character.level ?? 0)) {
+    state.character.level = newLevel;
+  }
   const classDef = state.classes?.[state.character.class_id];
   const bonus = classDef?.per_level_bonus ?? {};
   Object.entries(bonus).forEach(([stat, delta]) => {
@@ -584,6 +604,21 @@ function applyLevelUpEvent(payload) {
     level: payload.new_level,
     ts: payload.ts,
   };
+}
+
+function applyStatAllocated(payload) {
+  if (!state.character) {
+    return;
+  }
+  const statId = payload.stat_id;
+  if (!statId) {
+    return;
+  }
+  if (!state.character.stats) {
+    state.character.stats = {};
+  }
+  state.character.stats[statId] = Number(payload.new_value ?? payload.value ?? 0);
+  state.character.unspent_stat_points = Number(payload.remaining_points ?? 0);
 }
 
 function applyInventoryAdded(payload) {
@@ -929,6 +964,9 @@ function applyEvent(event) {
       break;
     case "level.up":
       applyLevelUpEvent({ ...event.payload, ts: event.ts });
+      break;
+    case "stat.allocated":
+      applyStatAllocated(event.payload);
       break;
     case "inventory.added":
       applyInventoryAdded(event.payload);
@@ -2052,6 +2090,136 @@ function renderChatThreads() {
     });
 }
 
+function formatLinkType(kind, payload = {}) {
+  if (kind === "npc") {
+    const type = payload.type || payload.role || payload.profile_type || "npc";
+    return type === "player" ? "Игрок" : "NPC";
+  }
+  if (kind === "quest") {
+    return "Квест";
+  }
+  if (kind === "item") {
+    return "Предмет";
+  }
+  return kind || "Ссылка";
+}
+
+function formatStatMods(statMods) {
+  if (!statMods || typeof statMods !== "object") {
+    return "";
+  }
+  const entries = Object.entries(statMods)
+    .filter(([, value]) => Number(value))
+    .map(([key, value]) => `${key}: ${value > 0 ? "+" : ""}${value}`);
+  return entries.join(", ");
+}
+
+function buildChatLinkCard(link) {
+  const payload = link.payload || {};
+  const kind = link.kind || link.type || "";
+  const card = document.createElement("div");
+  card.className = "chat-link-card";
+
+  const header = document.createElement("div");
+  header.className = "chat-link-card__header";
+  const title = document.createElement("div");
+  title.className = "chat-link-card__title";
+  title.textContent = link.title || link.label || link.id || "Ссылка";
+  const typeTag = document.createElement("span");
+  typeTag.className = "tag";
+  typeTag.textContent = formatLinkType(kind, payload);
+  header.appendChild(title);
+  header.appendChild(typeTag);
+
+  const meta = document.createElement("div");
+  meta.className = "chat-link-card__meta";
+  const metaItems = [];
+  if (kind === "npc") {
+    const className = payload.class_name || payload.class || payload.class_id;
+    const level = payload.level;
+    const hpCurrent = payload.hp_current ?? payload.hp?.current ?? payload.hp?.value;
+    const hpMax = payload.hp_max ?? payload.hp?.max;
+    if (className) {
+      metaItems.push(`Класс: ${className}`);
+    }
+    if (level != null) {
+      metaItems.push(`Уровень: ${level}`);
+    }
+    if (hpCurrent != null || hpMax != null) {
+      metaItems.push(
+        `HP: ${hpCurrent != null ? hpCurrent : "—"}${hpMax != null ? `/${hpMax}` : ""}`,
+      );
+    }
+  }
+  if (kind === "quest") {
+    if (payload.objectives?.length) {
+      metaItems.push(`Цели: ${payload.objectives.length}`);
+    }
+    if (payload.cannot_decline) {
+      metaItems.push("Нельзя отказаться");
+    }
+  }
+  if (kind === "item") {
+    if (payload.rarity) {
+      metaItems.push(`Редкость: ${payload.rarity}`);
+    }
+    if (payload.item_type) {
+      metaItems.push(`Тип: ${payload.item_type}`);
+    }
+    const mods = formatStatMods(payload.stat_mods);
+    if (mods) {
+      metaItems.push(`Бонусы: ${mods}`);
+    }
+  }
+  metaItems.forEach((text) => {
+    const line = document.createElement("div");
+    line.textContent = text;
+    meta.appendChild(line);
+  });
+
+  const body = document.createElement("div");
+  body.className = "chat-link-card__body";
+  const description =
+    payload.description || payload.summary || payload.note || payload.details || "";
+  if (description) {
+    const desc = document.createElement("div");
+    desc.textContent = description;
+    body.appendChild(desc);
+  }
+
+  if (kind === "quest" && Array.isArray(payload.objectives) && payload.objectives.length) {
+    const list = document.createElement("ul");
+    list.className = "chat-link-card__list";
+    payload.objectives.slice(0, 3).forEach((objective) => {
+      const item = document.createElement("li");
+      item.textContent = objective.text || "Цель";
+      list.appendChild(item);
+    });
+    body.appendChild(list);
+  }
+
+  if (kind === "item" && Array.isArray(payload.tags) && payload.tags.length) {
+    const tags = document.createElement("div");
+    tags.className = "chat-link-card__tags";
+    payload.tags.forEach((tagText) => {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = tagText;
+      tags.appendChild(tag);
+    });
+    body.appendChild(tags);
+  }
+
+  card.appendChild(header);
+  if (meta.childElementCount) {
+    card.appendChild(meta);
+  }
+  if (body.childElementCount) {
+    card.appendChild(body);
+  }
+  return card;
+}
+
 function renderChatMessages() {
   if (!chatMessagesList) {
     return;
@@ -2101,13 +2269,17 @@ function renderChatMessages() {
     if (message.links?.length) {
       const links = document.createElement("div");
       links.className = "chat-message__links";
+      const cards = document.createElement("div");
+      cards.className = "chat-message__cards";
       message.links.forEach((link) => {
         const tag = document.createElement("div");
         tag.className = "chat-link-tag";
         tag.textContent = `${link.title || link.label || link.id} (${link.kind || link.type})`;
         links.appendChild(tag);
+        cards.appendChild(buildChatLinkCard(link));
       });
       item.appendChild(links);
+      item.appendChild(cards);
     }
 
     chatMessagesList.appendChild(item);
@@ -2434,6 +2606,47 @@ async function grantXp(amount) {
     setXpStatus(error.message, "error");
   } finally {
     xpSubmitBtn.disabled = false;
+  }
+}
+
+async function grantLevels(levels) {
+  const token = getToken();
+  if (!token) {
+    setStatus("Укажите токен", "error");
+    return;
+  }
+  if (!levels || levels <= 0) {
+    setLevelUpStatus("Введите количество уровней", "error");
+    return;
+  }
+  if (levelUpSubmitBtn) {
+    levelUpSubmitBtn.disabled = true;
+  }
+  try {
+    const response = await fetch("/api/host/level-up", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ levels }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось поднять уровень");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    if (levelUpInput) {
+      levelUpInput.value = "";
+    }
+    setLevelUpStatus("Уровни начислены", "ok");
+  } catch (error) {
+    setLevelUpStatus(error.message, "error");
+  } finally {
+    if (levelUpSubmitBtn) {
+      levelUpSubmitBtn.disabled = false;
+    }
   }
 }
 
@@ -2971,6 +3184,20 @@ xpInput.addEventListener("keydown", (event) => {
     grantXp(Number(xpInput.value));
   }
 });
+
+if (levelUpSubmitBtn) {
+  levelUpSubmitBtn.addEventListener("click", () => {
+    grantLevels(Number(levelUpInput?.value));
+  });
+}
+
+if (levelUpInput) {
+  levelUpInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      grantLevels(Number(levelUpInput.value));
+    }
+  });
+}
 
 document.querySelectorAll("[data-xp]").forEach((button) => {
   button.addEventListener("click", () => {

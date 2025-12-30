@@ -33,6 +33,7 @@ from domain.services import (
     choose_message_option,
     ensure_quest_not_duplicated,
     equip_item as equip_item_domain,
+    grant_levels,
     grant_xp_and_level,
 )
 from domain.rules import StatPointRule, XPCurveExponential
@@ -64,6 +65,56 @@ class CampaignService:
             self.state.system_messages.extend(messages)
             events.extend(self._events_for_messages(messages, actor_role))
         return events
+
+    def grant_levels(
+        self, levels: int, actor_role: str = HOST_ROLE
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        if levels <= 0:
+            raise DomainError("Уровни должны быть больше нуля")
+        class_def = self._get_class_def()
+        messages, events = grant_levels(
+            self.state.character,
+            levels,
+            self.state.settings.stat_rule,
+            class_def,
+        )
+        if messages:
+            self.state.system_messages.extend(messages)
+            events.extend(self._events_for_messages(messages, actor_role))
+        return events
+
+    def allocate_stat_points(
+        self, stat_id: str, amount: int, actor_role: str = PLAYER_ROLE
+    ) -> List[EventLogEntry]:
+        ensure_player(actor_role)
+        ensure_player_can_act(self.state.character)
+        if not stat_id:
+            raise DomainError("Не указан идентификатор статы")
+        if amount <= 0:
+            raise DomainError("Количество очков должно быть больше нуля")
+        available = int(self.state.character.unspent_stat_points or 0)
+        if amount > available:
+            raise DomainError("Недостаточно свободных очков")
+        current = int(self.state.character.stats.get(stat_id, 0))
+        new_value = current + amount
+        self.state.character.stats[stat_id] = new_value
+        self.state.character.unspent_stat_points = available - amount
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.stat_allocated.value,
+                payload={
+                    "character_id": self.state.character.id,
+                    "stat_id": stat_id,
+                    "amount": amount,
+                    "new_value": new_value,
+                    "remaining_points": self.state.character.unspent_stat_points,
+                },
+            )
+        ]
 
     def update_settings(
         self,

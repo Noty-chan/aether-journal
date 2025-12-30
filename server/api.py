@@ -20,6 +20,7 @@ from domain.models import (
     QuestStatus,
     Rarity,
     chat_link_to_dict,
+    objective_to_dict,
 )
 from storage.json_repo import serialize_campaign_state
 
@@ -101,6 +102,15 @@ class QuestAssignRequest(BaseModel):
 
 class QuestStatusRequest(BaseModel):
     status: QuestStatus
+
+
+class LevelUpRequest(BaseModel):
+    levels: int = Field(..., ge=1)
+
+
+class StatAllocationRequest(BaseModel):
+    stat_id: str
+    amount: int = Field(..., ge=1)
 
 
 class MessageRequest(BaseModel):
@@ -218,6 +228,10 @@ def resolve_chat_links(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="NPC not found"
                 )
             label = contact.display_name
+            payload = {
+                "display_name": contact.display_name,
+                **(contact.link_payload or {}),
+            }
         elif link.type == "quest":
             quest = state.quest_templates.get(link.id)
             if not quest:
@@ -225,6 +239,12 @@ def resolve_chat_links(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Quest not found"
                 )
             label = quest.name
+            payload = {
+                "description": quest.description,
+                "cannot_decline": quest.cannot_decline,
+                "objectives": [objective_to_dict(obj) for obj in quest.objectives],
+                "rewards": quest.rewards,
+            }
         elif link.type == "item":
             item = state.item_templates.get(link.id)
             if not item:
@@ -232,6 +252,14 @@ def resolve_chat_links(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Item not found"
                 )
             label = item.name
+            payload = {
+                "description": item.description,
+                "item_type": item.item_type.value if hasattr(item.item_type, "value") else item.item_type,
+                "rarity": item.rarity.value if hasattr(item.rarity, "value") else item.rarity,
+                "two_handed": item.two_handed,
+                "stat_mods": item.stat_mods,
+                "tags": item.tags,
+            }
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported link type"
@@ -242,6 +270,7 @@ def resolve_chat_links(
                     kind=link.type,
                     id=link.id,
                     title=label,
+                    payload=payload,
                 )
             )
         )
@@ -318,6 +347,16 @@ async def grant_xp(
 ) -> Dict[str, Any]:
     return await _apply_service(
         context, lambda: context.service.grant_xp(payload.amount, actor_role=HOST_ROLE)
+    )
+
+
+@router.post("/host/level-up", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def grant_levels(
+    payload: LevelUpRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.grant_levels(levels=payload.levels, actor_role=HOST_ROLE),
     )
 
 
@@ -510,6 +549,23 @@ async def choose_message(
         context,
         lambda: context.service.choose_message_option(
             message_id=message_id, option_id=payload.option_id, actor_role=PLAYER_ROLE
+        ),
+    )
+
+
+@router.post(
+    "/player/stats/allocate",
+    dependencies=[Depends(require_token_role(PLAYER_ROLE))],
+)
+async def allocate_stat_points(
+    payload: StatAllocationRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.allocate_stat_points(
+            stat_id=payload.stat_id,
+            amount=payload.amount,
+            actor_role=PLAYER_ROLE,
         ),
     )
 
