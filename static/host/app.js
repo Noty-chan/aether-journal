@@ -1802,7 +1802,7 @@ function renderQuestTemplates() {
   }
   const activeTemplateIds = new Set(
     (state.activeQuests || [])
-      .filter((quest) => quest.status === "active")
+      .filter((quest) => !["completed", "failed"].includes(quest.status))
       .map((quest) => quest.template_id),
   );
   filtered

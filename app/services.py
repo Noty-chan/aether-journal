@@ -282,6 +282,10 @@ class CampaignService:
         actor_role: str = HOST_ROLE,
     ) -> List[EventLogEntry]:
         ensure_host(actor_role)
+        if template_id not in self.state.item_templates:
+            raise DomainError("Item template not found")
+        if qty <= 0:
+            raise DomainError("Количество должно быть больше нуля")
         inst = ItemInstance(
             id=new_id("item"),
             template_id=template_id,
@@ -413,6 +417,8 @@ class CampaignService:
         quest.status = new_status
         if new_status in (QuestStatus.completed, QuestStatus.failed):
             quest.completed_at = utcnow()
+        else:
+            quest.completed_at = None
         return [
             EventLogEntry(
                 seq=0,
