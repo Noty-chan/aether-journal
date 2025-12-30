@@ -310,6 +310,8 @@ def serialize_equipment(equipment: EquipmentState) -> Dict[str, Any]:
 
 def deserialize_equipment(data: Dict[str, Any]) -> EquipmentState:
     slots = {slot: None for slot in EquipmentSlot}
+    if not isinstance(data, dict):
+        return EquipmentState(slots=slots)
     for key, value in data.items():
         try:
             slot = EquipmentSlot(key)
