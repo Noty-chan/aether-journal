@@ -30,6 +30,8 @@
 
       <div class="tabs" role="tablist">
         <button class="tab active" type="button" data-tab="sheet">Персонаж</button>
+        <button class="tab" type="button" data-tab="rules">Правила</button>
+        <button class="tab" type="button" data-tab="library">Библиотека</button>
         <button class="tab" type="button" data-tab="quests">Квесты</button>
         <button class="tab" type="button" data-tab="abilities">Способности</button>
         <button class="tab" type="button" data-tab="messages">
@@ -123,6 +125,166 @@
             </div>
             <div class="equipment__grid" id="equipment-grid"></div>
           </section>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="rules" hidden>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Правила кампании</h2>
+            <span class="meta">Редактирование XP и очков статов</span>
+          </div>
+          <div class="form-row">
+            <label for="rules-base-xp">Базовый XP за уровень</label>
+            <input id="rules-base-xp" type="number" min="1" />
+          </div>
+          <div class="form-row">
+            <label for="rules-growth-rate">Коэффициент роста XP</label>
+            <input id="rules-growth-rate" type="number" step="0.01" min="0.01" />
+          </div>
+          <div class="form-row">
+            <label for="rules-base-per-level">Очков статов за уровень</label>
+            <input id="rules-base-per-level" type="number" min="0" />
+          </div>
+          <div class="form-row">
+            <label for="rules-bonus-every-5">Бонус каждые 5 уровней</label>
+            <input id="rules-bonus-every-5" type="number" min="0" />
+          </div>
+          <div class="form-row">
+            <label for="rules-bonus-every-10">Бонус каждые 10 уровней</label>
+            <input id="rules-bonus-every-10" type="number" min="0" />
+          </div>
+          <div class="form-actions">
+            <button id="rules-save" type="button">Сохранить правила</button>
+          </div>
+          <div class="hint" id="rules-status">Настройки не изменены.</div>
+          <div class="divider"></div>
+          <h3>Бонусы классов за уровень</h3>
+          <div class="form-row">
+            <label for="rules-class-select">Класс</label>
+            <select id="rules-class-select"></select>
+          </div>
+          <div class="form-row">
+            <label for="rules-class-bonus">Пер-уровневые бонусы (JSON)</label>
+            <textarea
+              id="rules-class-bonus"
+              rows="4"
+              placeholder='{"strength": 1, "agility": 0}'
+            ></textarea>
+          </div>
+          <div class="form-actions">
+            <button id="rules-class-save" type="button">Сохранить бонусы</button>
+          </div>
+          <div class="hint" id="rules-class-status">Изменений нет.</div>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="library" hidden>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Библиотека предметов</h2>
+            <span class="meta" id="item-templates-count">0</span>
+          </div>
+          <div class="form-row">
+            <label for="item-template-name">Название</label>
+            <input id="item-template-name" type="text" placeholder="Напр. Меч ветров" />
+          </div>
+          <div class="form-row">
+            <label for="item-template-type">Тип</label>
+            <select id="item-template-type">
+              <option value="weapon">Оружие</option>
+              <option value="armor">Броня</option>
+              <option value="accessory">Аксессуар</option>
+              <option value="consumable">Расходник</option>
+              <option value="misc">Прочее</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="item-template-rarity">Редкость</label>
+            <select id="item-template-rarity">
+              <option value="white">Обычный</option>
+              <option value="green">Необычный</option>
+              <option value="blue">Редкий</option>
+              <option value="purple">Эпический</option>
+              <option value="gold">Легендарный</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="item-template-description">Описание</label>
+            <textarea id="item-template-description" rows="3"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="item-template-slots">Слоты экипировки (через запятую)</label>
+            <input id="item-template-slots" type="text" placeholder="weapon_1, weapon_2" />
+          </div>
+          <div class="form-row">
+            <label for="item-template-stat-mods">Бонусы статов (JSON)</label>
+            <textarea
+              id="item-template-stat-mods"
+              rows="3"
+              placeholder='{"strength": 2}'
+            ></textarea>
+          </div>
+          <div class="form-row">
+            <label for="item-template-tags">Теги (через запятую)</label>
+            <input id="item-template-tags" type="text" placeholder="меч, редкое" />
+          </div>
+          <div class="form-row inline">
+            <label for="item-template-two-handed">Двуручное</label>
+            <input id="item-template-two-handed" type="checkbox" />
+          </div>
+          <div class="form-actions">
+            <button id="item-template-save" type="button">Сохранить шаблон</button>
+          </div>
+          <div class="hint" id="item-template-status">Готово к созданию.</div>
+        </section>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Шаблоны</h2>
+            <span class="meta">Добавление в инвентарь игрока</span>
+          </div>
+          <div class="list" id="item-templates-list"></div>
+        </section>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Шаблоны сообщений</h2>
+            <span class="meta" id="message-templates-count">0</span>
+          </div>
+          <div class="form-row">
+            <label for="message-template-name">Название</label>
+            <input id="message-template-name" type="text" placeholder="Напр. Предупреждение" />
+          </div>
+          <div class="form-row">
+            <label for="message-template-title">Заголовок</label>
+            <input id="message-template-title" type="text" placeholder="Заголовок сообщения" />
+          </div>
+          <div class="form-row">
+            <label for="message-template-body">Текст</label>
+            <textarea id="message-template-body" rows="3"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="message-template-severity">Важность</label>
+            <select id="message-template-severity">
+              <option value="info">Инфо</option>
+              <option value="warning">Внимание</option>
+              <option value="alert">Тревога</option>
+            </select>
+          </div>
+          <div class="form-row inline">
+            <label for="message-template-collapsible">Сворачиваемое</label>
+            <input id="message-template-collapsible" type="checkbox" checked />
+          </div>
+          <div class="form-actions">
+            <button id="message-template-save" type="button">Сохранить шаблон</button>
+          </div>
+          <div class="hint" id="message-template-status">Готово к созданию.</div>
+        </section>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Отправка шаблонов</h2>
+            <span class="meta">Быстрые системные сообщения</span>
+          </div>
+          <div class="list" id="message-templates-list"></div>
         </section>
       </section>
 

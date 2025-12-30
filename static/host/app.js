@@ -29,6 +29,40 @@ const messagesList = document.getElementById("system-messages");
 const messagesCountEl = document.getElementById("messages-count");
 const logList = document.getElementById("event-log");
 const logCountEl = document.getElementById("log-count");
+const rulesBaseXpInput = document.getElementById("rules-base-xp");
+const rulesGrowthRateInput = document.getElementById("rules-growth-rate");
+const rulesBasePerLevelInput = document.getElementById("rules-base-per-level");
+const rulesBonusEvery5Input = document.getElementById("rules-bonus-every-5");
+const rulesBonusEvery10Input = document.getElementById("rules-bonus-every-10");
+const rulesSaveBtn = document.getElementById("rules-save");
+const rulesStatusEl = document.getElementById("rules-status");
+const rulesClassSelect = document.getElementById("rules-class-select");
+const rulesClassBonusInput = document.getElementById("rules-class-bonus");
+const rulesClassSaveBtn = document.getElementById("rules-class-save");
+const rulesClassStatusEl = document.getElementById("rules-class-status");
+const itemTemplateNameInput = document.getElementById("item-template-name");
+const itemTemplateTypeSelect = document.getElementById("item-template-type");
+const itemTemplateRaritySelect = document.getElementById("item-template-rarity");
+const itemTemplateDescriptionInput = document.getElementById("item-template-description");
+const itemTemplateSlotsInput = document.getElementById("item-template-slots");
+const itemTemplateStatModsInput = document.getElementById("item-template-stat-mods");
+const itemTemplateTagsInput = document.getElementById("item-template-tags");
+const itemTemplateTwoHandedInput = document.getElementById("item-template-two-handed");
+const itemTemplateSaveBtn = document.getElementById("item-template-save");
+const itemTemplateStatusEl = document.getElementById("item-template-status");
+const itemTemplatesList = document.getElementById("item-templates-list");
+const itemTemplatesCountEl = document.getElementById("item-templates-count");
+const messageTemplateNameInput = document.getElementById("message-template-name");
+const messageTemplateTitleInput = document.getElementById("message-template-title");
+const messageTemplateBodyInput = document.getElementById("message-template-body");
+const messageTemplateSeveritySelect = document.getElementById("message-template-severity");
+const messageTemplateCollapsibleInput = document.getElementById(
+  "message-template-collapsible",
+);
+const messageTemplateSaveBtn = document.getElementById("message-template-save");
+const messageTemplateStatusEl = document.getElementById("message-template-status");
+const messageTemplatesList = document.getElementById("message-templates-list");
+const messageTemplatesCountEl = document.getElementById("message-templates-count");
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -54,6 +88,7 @@ const state = {
   character: null,
   classes: {},
   templates: {},
+  messageTemplates: {},
   questTemplates: {},
   activeQuests: [],
   abilityCategories: {},
@@ -67,6 +102,7 @@ const state = {
   audioContext: null,
   eventLog: [],
   eventSeqs: new Set(),
+  classOptionsKey: "",
 };
 
 function setStatus(message, variant = "") {
@@ -83,6 +119,54 @@ function setXpStatus(message, variant = "") {
   if (variant) {
     xpStatusEl.classList.add(`status--${variant}`);
   }
+}
+
+function setRulesStatus(message, variant = "") {
+  if (!rulesStatusEl) {
+    return;
+  }
+  rulesStatusEl.textContent = message;
+  rulesStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    rulesStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setRulesClassStatus(message, variant = "") {
+  if (!rulesClassStatusEl) {
+    return;
+  }
+  rulesClassStatusEl.textContent = message;
+  rulesClassStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    rulesClassStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setItemTemplateStatus(message, variant = "") {
+  if (!itemTemplateStatusEl) {
+    return;
+  }
+  itemTemplateStatusEl.textContent = message;
+  itemTemplateStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    itemTemplateStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setMessageTemplateStatus(message, variant = "") {
+  if (!messageTemplateStatusEl) {
+    return;
+  }
+  messageTemplateStatusEl.textContent = message;
+  messageTemplateStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    messageTemplateStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function getSelectedClassId() {
+  return rulesClassSelect?.value || state.character?.class_id || "";
 }
 
 function setupTabs() {
@@ -600,6 +684,51 @@ function applyFreeze(payload) {
   state.character.frozen = Boolean(payload.frozen);
 }
 
+function applySettingsUpdated(payload) {
+  if (!payload) {
+    return;
+  }
+  if (!state.settings) {
+    state.settings = {};
+  }
+  if (payload.xp_curve) {
+    state.settings.xp_curve = payload.xp_curve;
+  }
+  if (payload.stat_rule) {
+    state.settings.stat_rule = payload.stat_rule;
+  }
+  renderSettings();
+}
+
+function applyClassBonusUpdated(payload) {
+  if (!payload?.class_id) {
+    return;
+  }
+  if (!state.classes[payload.class_id]) {
+    return;
+  }
+  state.classes[payload.class_id].per_level_bonus = payload.per_level_bonus || {};
+  renderSettings();
+}
+
+function applyItemTemplateUpserted(payload) {
+  const template = payload?.template;
+  if (!template || !template.id) {
+    return;
+  }
+  state.templates[template.id] = template;
+  renderItemTemplates();
+}
+
+function applyMessageTemplateUpserted(payload) {
+  const template = payload?.template;
+  if (!template || !template.id) {
+    return;
+  }
+  state.messageTemplates[template.id] = template;
+  renderMessageTemplates();
+}
+
 function applyEvent(event) {
   switch (event.kind) {
     case "xp.granted":
@@ -651,6 +780,18 @@ function applyEvent(event) {
     case "ability.removed":
       applyAbilityRemoved(event.payload);
       break;
+    case "settings.updated":
+      applySettingsUpdated(event.payload);
+      break;
+    case "class.per_level_bonus.updated":
+      applyClassBonusUpdated(event.payload);
+      break;
+    case "item.template.upserted":
+      applyItemTemplateUpserted(event.payload);
+      break;
+    case "message.template.upserted":
+      applyMessageTemplateUpserted(event.payload);
+      break;
     default:
       break;
   }
@@ -668,6 +809,7 @@ function applySnapshot(snapshot) {
   state.classes = snapshot.classes || {};
   state.templates = snapshot.item_templates || {};
   state.questTemplates = snapshot.quest_templates || {};
+  state.messageTemplates = snapshot.message_templates || {};
   state.activeQuests = snapshot.active_quests || [];
   state.abilityCategories = snapshot.ability_categories || {};
   state.abilities = snapshot.abilities || {};
@@ -675,6 +817,7 @@ function applySnapshot(snapshot) {
   state.settings = snapshot.settings || null;
   state.eventLog = [];
   state.eventSeqs = new Set();
+  state.classOptionsKey = "";
   if (!state.character?.equipment) {
     state.character.equipment = {};
   }
@@ -1362,6 +1505,138 @@ function renderMessages() {
   });
 }
 
+function renderItemTemplates() {
+  if (!itemTemplatesList) {
+    return;
+  }
+  const templates = Object.values(state.templates || {});
+  itemTemplatesList.innerHTML = "";
+  if (itemTemplatesCountEl) {
+    itemTemplatesCountEl.textContent = `${templates.length}`;
+  }
+  if (!templates.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Нет шаблонов предметов.";
+    itemTemplatesList.appendChild(empty);
+    return;
+  }
+  templates
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+    .forEach((template) => {
+      const row = document.createElement("div");
+      row.className = "list-row";
+      const info = document.createElement("div");
+      info.className = "list-row__info";
+      const title = document.createElement("div");
+      title.textContent = template.name || "Без названия";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = `${template.item_type || "misc"} · ${template.rarity || "white"}`;
+      info.appendChild(title);
+      info.appendChild(meta);
+      const actions = document.createElement("div");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost";
+      button.textContent = "Добавить игроку";
+      button.addEventListener("click", () => addItemFromTemplate(template.id, button));
+      actions.appendChild(button);
+      row.appendChild(info);
+      row.appendChild(actions);
+      itemTemplatesList.appendChild(row);
+    });
+}
+
+function renderMessageTemplates() {
+  if (!messageTemplatesList) {
+    return;
+  }
+  const templates = Object.values(state.messageTemplates || {});
+  messageTemplatesList.innerHTML = "";
+  if (messageTemplatesCountEl) {
+    messageTemplatesCountEl.textContent = `${templates.length}`;
+  }
+  if (!templates.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Нет шаблонов сообщений.";
+    messageTemplatesList.appendChild(empty);
+    return;
+  }
+  templates
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+    .forEach((template) => {
+      const row = document.createElement("div");
+      row.className = "list-row";
+      const info = document.createElement("div");
+      info.className = "list-row__info";
+      const title = document.createElement("div");
+      title.textContent = template.name || "Без названия";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = `${template.severity || "info"} · ${
+        template.collapsible ? "сворач." : "несворач."
+      }`;
+      info.appendChild(title);
+      info.appendChild(meta);
+      const actions = document.createElement("div");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost";
+      button.textContent = "Отправить";
+      button.addEventListener("click", () => sendMessageTemplate(template.id, button));
+      actions.appendChild(button);
+      row.appendChild(info);
+      row.appendChild(actions);
+      messageTemplatesList.appendChild(row);
+    });
+}
+
+function renderSettings() {
+  if (!state.settings) {
+    return;
+  }
+  if (rulesBaseXpInput) {
+    rulesBaseXpInput.value = state.settings.xp_curve?.base_xp ?? "";
+  }
+  if (rulesGrowthRateInput) {
+    rulesGrowthRateInput.value = state.settings.xp_curve?.growth_rate ?? "";
+  }
+  if (rulesBasePerLevelInput) {
+    rulesBasePerLevelInput.value = state.settings.stat_rule?.base_per_level ?? "";
+  }
+  if (rulesBonusEvery5Input) {
+    rulesBonusEvery5Input.value = state.settings.stat_rule?.bonus_every_5 ?? "";
+  }
+  if (rulesBonusEvery10Input) {
+    rulesBonusEvery10Input.value = state.settings.stat_rule?.bonus_every_10 ?? "";
+  }
+  if (rulesClassSelect) {
+    const classIds = Object.keys(state.classes || {});
+    const key = classIds.join("|");
+    if (state.classOptionsKey !== key) {
+      const selected = getSelectedClassId() || classIds[0] || "";
+      rulesClassSelect.innerHTML = "";
+      classIds.forEach((classId) => {
+        const option = document.createElement("option");
+        option.value = classId;
+        option.textContent = state.classes[classId]?.name || classId;
+        rulesClassSelect.appendChild(option);
+      });
+      rulesClassSelect.value = selected || classIds[0] || "";
+      state.classOptionsKey = key;
+    }
+  }
+  if (rulesClassBonusInput) {
+    const classId = getSelectedClassId();
+    const bonus = state.classes?.[classId]?.per_level_bonus || {};
+    if (document.activeElement !== rulesClassBonusInput) {
+      rulesClassBonusInput.value = JSON.stringify(bonus, null, 2);
+    }
+  }
+}
+
 function render() {
   if (!state.character) {
     return;
@@ -1375,6 +1650,9 @@ function render() {
   renderAbilities();
   renderMessages();
   renderLog();
+  renderSettings();
+  renderItemTemplates();
+  renderMessageTemplates();
   if (questCountEl) {
     questCountEl.textContent = `${state.activeQuests?.length || 0}`;
   }
@@ -1518,6 +1796,290 @@ async function grantXp(amount) {
   }
 }
 
+async function updateRulesSettings() {
+  const token = getToken();
+  if (!token) {
+    setRulesStatus("Укажите токен", "error");
+    return;
+  }
+  const baseXp = Number(rulesBaseXpInput?.value);
+  const growthRate = Number(rulesGrowthRateInput?.value);
+  const basePerLevel = Number(rulesBasePerLevelInput?.value);
+  const bonusEvery5 = Number(rulesBonusEvery5Input?.value);
+  const bonusEvery10 = Number(rulesBonusEvery10Input?.value);
+  if (!baseXp || baseXp <= 0 || !growthRate || growthRate <= 0) {
+    setRulesStatus("Проверьте значения XP", "error");
+    return;
+  }
+  rulesSaveBtn.disabled = true;
+  setRulesStatus("Сохранение...");
+  try {
+    const response = await fetch("/api/host/settings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        xp_curve: { base_xp: baseXp, growth_rate: growthRate },
+        stat_rule: {
+          base_per_level: basePerLevel,
+          bonus_every_5: bonusEvery5,
+          bonus_every_10: bonusEvery10,
+        },
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось сохранить правила");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setRulesStatus("Правила обновлены", "ok");
+  } catch (error) {
+    setRulesStatus(error.message, "error");
+  } finally {
+    rulesSaveBtn.disabled = false;
+  }
+}
+
+async function updateClassBonus() {
+  const token = getToken();
+  if (!token) {
+    setRulesClassStatus("Укажите токен", "error");
+    return;
+  }
+  const classId = getSelectedClassId();
+  if (!classId) {
+    setRulesClassStatus("Выберите класс", "error");
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(rulesClassBonusInput?.value || "{}");
+  } catch (error) {
+    setRulesClassStatus("Некорректный JSON", "error");
+    return;
+  }
+  rulesClassSaveBtn.disabled = true;
+  setRulesClassStatus("Сохранение...");
+  try {
+    const response = await fetch(`/api/host/classes/${classId}/per-level-bonus`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ per_level_bonus: parsed }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось сохранить бонусы");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setRulesClassStatus("Бонусы обновлены", "ok");
+  } catch (error) {
+    setRulesClassStatus(error.message, "error");
+  } finally {
+    rulesClassSaveBtn.disabled = false;
+  }
+}
+
+async function upsertItemTemplate() {
+  const token = getToken();
+  if (!token) {
+    setItemTemplateStatus("Укажите токен", "error");
+    return;
+  }
+  const name = itemTemplateNameInput?.value.trim() || "";
+  if (!name) {
+    setItemTemplateStatus("Введите название", "error");
+    return;
+  }
+  let statMods = {};
+  if (itemTemplateStatModsInput?.value.trim()) {
+    try {
+      statMods = JSON.parse(itemTemplateStatModsInput.value);
+    } catch (error) {
+      setItemTemplateStatus("Некорректный JSON бонусов", "error");
+      return;
+    }
+  }
+  const slots = (itemTemplateSlotsInput?.value || "")
+    .split(",")
+    .map((slot) => slot.trim())
+    .filter(Boolean);
+  const tags = (itemTemplateTagsInput?.value || "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  itemTemplateSaveBtn.disabled = true;
+  setItemTemplateStatus("Сохранение...");
+  try {
+    const response = await fetch("/api/host/item-templates", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name,
+        item_type: itemTemplateTypeSelect?.value || "misc",
+        rarity: itemTemplateRaritySelect?.value || "white",
+        description: itemTemplateDescriptionInput?.value || "",
+        equip_slots: slots,
+        two_handed: Boolean(itemTemplateTwoHandedInput?.checked),
+        stat_mods: statMods,
+        tags,
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось сохранить шаблон");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setItemTemplateStatus("Шаблон сохранён", "ok");
+    itemTemplateNameInput.value = "";
+    itemTemplateDescriptionInput.value = "";
+    itemTemplateSlotsInput.value = "";
+    itemTemplateStatModsInput.value = "";
+    itemTemplateTagsInput.value = "";
+    itemTemplateTwoHandedInput.checked = false;
+  } catch (error) {
+    setItemTemplateStatus(error.message, "error");
+  } finally {
+    itemTemplateSaveBtn.disabled = false;
+  }
+}
+
+async function addItemFromTemplate(templateId, button) {
+  const token = getToken();
+  if (!token) {
+    setItemTemplateStatus("Укажите токен", "error");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+  }
+  try {
+    const response = await fetch("/api/host/items", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ template_id: templateId, qty: 1 }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось добавить предмет");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setItemTemplateStatus("Предмет добавлен", "ok");
+  } catch (error) {
+    setItemTemplateStatus(error.message, "error");
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+async function upsertMessageTemplate() {
+  const token = getToken();
+  if (!token) {
+    setMessageTemplateStatus("Укажите токен", "error");
+    return;
+  }
+  const name = messageTemplateNameInput?.value.trim() || "";
+  const title = messageTemplateTitleInput?.value.trim() || "";
+  const body = messageTemplateBodyInput?.value.trim() || "";
+  if (!name || !title || !body) {
+    setMessageTemplateStatus("Заполните название, заголовок и текст", "error");
+    return;
+  }
+  messageTemplateSaveBtn.disabled = true;
+  setMessageTemplateStatus("Сохранение...");
+  try {
+    const response = await fetch("/api/host/message-templates", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name,
+        title,
+        body,
+        severity: messageTemplateSeveritySelect?.value || "info",
+        collapsible: Boolean(messageTemplateCollapsibleInput?.checked),
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось сохранить шаблон");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setMessageTemplateStatus("Шаблон сохранён", "ok");
+    messageTemplateNameInput.value = "";
+    messageTemplateTitleInput.value = "";
+    messageTemplateBodyInput.value = "";
+    messageTemplateCollapsibleInput.checked = true;
+  } catch (error) {
+    setMessageTemplateStatus(error.message, "error");
+  } finally {
+    messageTemplateSaveBtn.disabled = false;
+  }
+}
+
+async function sendMessageTemplate(templateId, button) {
+  const token = getToken();
+  if (!token) {
+    setMessageTemplateStatus("Укажите токен", "error");
+    return;
+  }
+  const template = state.messageTemplates?.[templateId];
+  if (!template) {
+    setMessageTemplateStatus("Шаблон не найден", "error");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+  }
+  try {
+    const response = await fetch("/api/host/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        title: template.title,
+        body: template.body,
+        severity: template.severity || "info",
+        collapsible: Boolean(template.collapsible),
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось отправить сообщение");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setMessageTemplateStatus("Сообщение отправлено", "ok");
+  } catch (error) {
+    setMessageTemplateStatus(error.message, "error");
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
 connectBtn.addEventListener("click", fetchSnapshot);
 refreshBtn.addEventListener("click", fetchSnapshot);
 
@@ -1537,6 +2099,28 @@ document.querySelectorAll("[data-xp]").forEach((button) => {
     grantXp(amount);
   });
 });
+
+if (rulesSaveBtn) {
+  rulesSaveBtn.addEventListener("click", updateRulesSettings);
+}
+
+if (rulesClassSaveBtn) {
+  rulesClassSaveBtn.addEventListener("click", updateClassBonus);
+}
+
+if (rulesClassSelect) {
+  rulesClassSelect.addEventListener("change", () => {
+    renderSettings();
+  });
+}
+
+if (itemTemplateSaveBtn) {
+  itemTemplateSaveBtn.addEventListener("click", upsertItemTemplate);
+}
+
+if (messageTemplateSaveBtn) {
+  messageTemplateSaveBtn.addEventListener("click", upsertMessageTemplate);
+}
 
 const storedToken = localStorage.getItem("hostToken");
 if (storedToken) {

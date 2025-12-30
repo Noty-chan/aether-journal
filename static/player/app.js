@@ -56,6 +56,7 @@ const state = {
   character: null,
   classes: {},
   templates: {},
+  messageTemplates: {},
   questTemplates: {},
   activeQuests: [],
   abilityCategories: {},
@@ -589,6 +590,47 @@ function applyFreeze(payload) {
   state.character.frozen = Boolean(payload.frozen);
 }
 
+function applySettingsUpdated(payload) {
+  if (!payload) {
+    return;
+  }
+  if (!state.settings) {
+    state.settings = {};
+  }
+  if (payload.xp_curve) {
+    state.settings.xp_curve = payload.xp_curve;
+  }
+  if (payload.stat_rule) {
+    state.settings.stat_rule = payload.stat_rule;
+  }
+}
+
+function applyClassBonusUpdated(payload) {
+  if (!payload?.class_id) {
+    return;
+  }
+  if (!state.classes[payload.class_id]) {
+    return;
+  }
+  state.classes[payload.class_id].per_level_bonus = payload.per_level_bonus || {};
+}
+
+function applyItemTemplateUpserted(payload) {
+  const template = payload?.template;
+  if (!template || !template.id) {
+    return;
+  }
+  state.templates[template.id] = template;
+}
+
+function applyMessageTemplateUpserted(payload) {
+  const template = payload?.template;
+  if (!template || !template.id) {
+    return;
+  }
+  state.messageTemplates[template.id] = template;
+}
+
 function ensureContact(contactId) {
   if (!state.contacts[contactId]) {
     state.contacts[contactId] = {
@@ -685,6 +727,18 @@ function applyEvent(event) {
     case "ability.removed":
       applyAbilityRemoved(event.payload);
       break;
+    case "settings.updated":
+      applySettingsUpdated(event.payload);
+      break;
+    case "class.per_level_bonus.updated":
+      applyClassBonusUpdated(event.payload);
+      break;
+    case "item.template.upserted":
+      applyItemTemplateUpserted(event.payload);
+      break;
+    case "message.template.upserted":
+      applyMessageTemplateUpserted(event.payload);
+      break;
     default:
       break;
   }
@@ -702,6 +756,7 @@ function applySnapshot(snapshot) {
   state.classes = snapshot.classes || {};
   state.templates = snapshot.item_templates || {};
   state.questTemplates = snapshot.quest_templates || {};
+  state.messageTemplates = snapshot.message_templates || {};
   state.activeQuests = snapshot.active_quests || [];
   state.abilityCategories = snapshot.ability_categories || {};
   state.abilities = snapshot.abilities || {};

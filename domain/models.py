@@ -160,6 +160,7 @@ class CampaignState:
     classes: Dict[str, ClassDefinition] = field(default_factory=dict)
     item_templates: Dict[str, ItemTemplate] = field(default_factory=dict)
     quest_templates: Dict[str, QuestTemplate] = field(default_factory=dict)
+    message_templates: Dict[str, "MessageTemplate"] = field(default_factory=dict)
     ability_categories: Dict[str, AbilityCategory] = field(default_factory=dict)
     abilities: Dict[str, Ability] = field(default_factory=dict)
     active_quests: List[QuestInstance] = field(default_factory=list)
@@ -307,6 +308,37 @@ class SystemMessage:
             chosen_option_id=data.get("chosen_option_id"),
             sound=MessageSeverity(data.get("sound", MessageSeverity.info.value)),
             effect=data.get("effect"),
+        )
+
+
+@dataclass
+class MessageTemplate:
+    id: str
+    name: str
+    title: str
+    body: str
+    severity: MessageSeverity = MessageSeverity.info
+    collapsible: bool = True
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "title": self.title,
+            "body": self.body,
+            "severity": self.severity.value,
+            "collapsible": self.collapsible,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MessageTemplate":
+        return cls(
+            id=str(data.get("id", new_id("msg_tpl"))),
+            name=str(data.get("name", "")),
+            title=str(data.get("title", "")),
+            body=str(data.get("body", "")),
+            severity=MessageSeverity(data.get("severity", MessageSeverity.info.value)),
+            collapsible=bool(data.get("collapsible", True)),
         )
 
 

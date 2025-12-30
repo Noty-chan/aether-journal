@@ -32,6 +32,7 @@ from domain.models import (
     QuestTemplate,
     Rarity,
     SystemMessage,
+    MessageTemplate,
     chat_link_from_dict,
     chat_link_to_dict,
 )
@@ -149,6 +150,9 @@ def serialize_campaign_state(state: CampaignState) -> Dict[str, Any]:
         "quest_templates": {
             qid: serialize_quest_template(tpl) for qid, tpl in state.quest_templates.items()
         },
+        "message_templates": {
+            mid: tpl.to_dict() for mid, tpl in state.message_templates.items()
+        },
         "ability_categories": {
             cid: serialize_ability_category(cat)
             for cid, cat in state.ability_categories.items()
@@ -183,6 +187,10 @@ def deserialize_campaign_state(data: Dict[str, Any]) -> CampaignState:
         quest_templates={
             qid: deserialize_quest_template(tpl)
             for qid, tpl in data.get("quest_templates", {}).items()
+        },
+        message_templates={
+            mid: MessageTemplate.from_dict(tpl)
+            for mid, tpl in data.get("message_templates", {}).items()
         },
         ability_categories={
             cid: deserialize_ability_category(cat)
