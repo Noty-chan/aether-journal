@@ -15,8 +15,10 @@ from domain.models import (
     Ability,
     ChatLink,
     EquipmentSlot,
+    ItemType,
     MessageSeverity,
     QuestStatus,
+    Rarity,
     chat_link_to_dict,
 )
 from storage.json_repo import serialize_campaign_state
@@ -31,6 +33,47 @@ class PairingRequest(BaseModel):
 
 class GrantXpRequest(BaseModel):
     amount: int
+
+
+class XpCurveRequest(BaseModel):
+    base_xp: int = Field(..., ge=1)
+    growth_rate: float = Field(..., gt=0)
+
+
+class StatRuleRequest(BaseModel):
+    base_per_level: int = Field(..., ge=0)
+    bonus_every_5: int = Field(..., ge=0)
+    bonus_every_10: int = Field(..., ge=0)
+
+
+class SettingsUpdateRequest(BaseModel):
+    xp_curve: XpCurveRequest
+    stat_rule: StatRuleRequest
+
+
+class ClassBonusUpdateRequest(BaseModel):
+    per_level_bonus: Dict[str, int] = Field(default_factory=dict)
+
+
+class ItemTemplateRequest(BaseModel):
+    id: Optional[str] = None
+    name: str
+    item_type: ItemType
+    rarity: Rarity = Rarity.white
+    description: str = ""
+    equip_slots: List[EquipmentSlot] = Field(default_factory=list)
+    two_handed: bool = False
+    stat_mods: Dict[str, int] = Field(default_factory=dict)
+    tags: List[str] = Field(default_factory=list)
+
+
+class MessageTemplateRequest(BaseModel):
+    id: Optional[str] = None
+    name: str
+    title: str
+    body: str
+    severity: MessageSeverity = MessageSeverity.info
+    collapsible: bool = True
 
 
 class AddItemRequest(BaseModel):
@@ -267,6 +310,81 @@ async def grant_xp(
 ) -> Dict[str, Any]:
     return await _apply_service(
         context, lambda: context.service.grant_xp(payload.amount, actor_role=HOST_ROLE)
+    )
+
+
+@router.post("/host/settings", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def update_settings(
+    payload: SettingsUpdateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.update_settings(
+            base_xp=payload.xp_curve.base_xp,
+            growth_rate=payload.xp_curve.growth_rate,
+            base_per_level=payload.stat_rule.base_per_level,
+            bonus_every_5=payload.stat_rule.bonus_every_5,
+            bonus_every_10=payload.stat_rule.bonus_every_10,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post(
+    "/host/classes/{class_id}/per-level-bonus",
+    dependencies=[Depends(require_token_role(HOST_ROLE))],
+)
+async def update_class_bonus(
+    class_id: str, payload: ClassBonusUpdateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.update_class_per_level_bonus(
+            class_id=class_id,
+            per_level_bonus=payload.per_level_bonus,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post("/host/item-templates", dependencies=[Depends(require_token_role(HOST_ROLE))])
+async def upsert_item_template(
+    payload: ItemTemplateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.upsert_item_template(
+            template_id=payload.id,
+            name=payload.name,
+            item_type=payload.item_type,
+            rarity=payload.rarity,
+            description=payload.description,
+            equip_slots=payload.equip_slots,
+            two_handed=payload.two_handed,
+            stat_mods=payload.stat_mods,
+            tags=payload.tags,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post(
+    "/host/message-templates", dependencies=[Depends(require_token_role(HOST_ROLE))]
+)
+async def upsert_message_template(
+    payload: MessageTemplateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.upsert_message_template(
+            template_id=payload.id,
+            name=payload.name,
+            title=payload.title,
+            body=payload.body,
+            severity=payload.severity,
+            collapsible=payload.collapsible,
+            actor_role=HOST_ROLE,
+        ),
     )
 
 

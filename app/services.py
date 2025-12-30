@@ -16,10 +16,14 @@ from domain.models import (
     ClassDefinition,
     EquipmentSlot,
     FriendRequest,
+    ItemTemplate,
+    ItemType,
     ItemInstance,
     MessageSeverity,
+    MessageTemplate,
     QuestInstance,
     QuestStatus,
+    Rarity,
     SystemMessage,
     chat_link_from_dict,
     chat_link_to_dict,
@@ -30,6 +34,7 @@ from domain.services import (
     equip_item as equip_item_domain,
     grant_xp_and_level,
 )
+from domain.rules import StatPointRule, XPCurveExponential
 
 from .permissions import (
     HOST_ROLE,
@@ -58,6 +63,151 @@ class CampaignService:
             self.state.system_messages.extend(messages)
             events.extend(self._events_for_messages(messages, actor_role))
         return events
+
+    def update_settings(
+        self,
+        base_xp: int,
+        growth_rate: float,
+        base_per_level: int,
+        bonus_every_5: int,
+        bonus_every_10: int,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        self.state.settings.xp_curve = XPCurveExponential(
+            base_xp=base_xp,
+            growth_rate=growth_rate,
+        )
+        self.state.settings.stat_rule = StatPointRule(
+            base_per_level=base_per_level,
+            bonus_every_5=bonus_every_5,
+            bonus_every_10=bonus_every_10,
+        )
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.settings_updated.value,
+                payload={
+                    "xp_curve": {
+                        "base_xp": base_xp,
+                        "growth_rate": growth_rate,
+                    },
+                    "stat_rule": {
+                        "base_per_level": base_per_level,
+                        "bonus_every_5": bonus_every_5,
+                        "bonus_every_10": bonus_every_10,
+                    },
+                },
+            )
+        ]
+
+    def update_class_per_level_bonus(
+        self,
+        class_id: str,
+        per_level_bonus: dict,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        class_def = self.state.classes.get(class_id)
+        if not class_def:
+            raise DomainError("Class not found")
+        class_def.per_level_bonus.per_level_stat_delta = {
+            str(key): int(value) for key, value in per_level_bonus.items()
+        }
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.class_bonus_updated.value,
+                payload={
+                    "class_id": class_id,
+                    "per_level_bonus": class_def.per_level_bonus.per_level_stat_delta,
+                },
+            )
+        ]
+
+    def upsert_item_template(
+        self,
+        template_id: Optional[str],
+        name: str,
+        item_type: ItemType,
+        rarity: Rarity,
+        description: str,
+        equip_slots: List[EquipmentSlot],
+        two_handed: bool,
+        stat_mods: dict,
+        tags: List[str],
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        template_id = template_id or new_id("item_tpl")
+        template = ItemTemplate(
+            id=template_id,
+            name=name,
+            item_type=item_type,
+            rarity=rarity,
+            description=description,
+            equip_slots=equip_slots,
+            two_handed=two_handed,
+            stat_mods={str(k): int(v) for k, v in stat_mods.items()},
+            tags=[str(tag) for tag in tags],
+        )
+        self.state.item_templates[template_id] = template
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.item_template_upserted.value,
+                payload={
+                    "template": {
+                        "id": template.id,
+                        "name": template.name,
+                        "item_type": template.item_type.value,
+                        "rarity": template.rarity.value,
+                        "description": template.description,
+                        "equip_slots": [slot.value for slot in template.equip_slots],
+                        "two_handed": template.two_handed,
+                        "stat_mods": template.stat_mods,
+                        "tags": template.tags,
+                    }
+                },
+            )
+        ]
+
+    def upsert_message_template(
+        self,
+        template_id: Optional[str],
+        name: str,
+        title: str,
+        body: str,
+        severity: MessageSeverity,
+        collapsible: bool,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        template_id = template_id or new_id("msg_tpl")
+        template = MessageTemplate(
+            id=template_id,
+            name=name,
+            title=title,
+            body=body,
+            severity=severity,
+            collapsible=collapsible,
+        )
+        self.state.message_templates[template_id] = template
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.message_template_upserted.value,
+                payload={"template": template.to_dict()},
+            )
+        ]
 
     def add_item_instance(
         self,
