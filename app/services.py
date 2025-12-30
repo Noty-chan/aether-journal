@@ -527,6 +527,12 @@ class CampaignService:
         actor_role: str = HOST_ROLE,
     ) -> List[EventLogEntry]:
         ensure_host(actor_role)
+        if maximum < 0:
+            raise DomainError("Максимум ресурса не может быть отрицательным")
+        if current < 0:
+            raise DomainError("Текущее значение ресурса не может быть отрицательным")
+        if current > maximum:
+            raise DomainError("Текущее значение не может превышать максимум")
         old_current, old_max = self.state.character.resources.get(resource_id, (0, 0))
         self.state.character.resources[resource_id] = (int(current), int(maximum))
         return [
@@ -726,6 +732,9 @@ class CampaignService:
         else:
             ensure_player(actor_role)
             ensure_player_can_act(self.state.character)
+        text = (text or "").strip()
+        if not text:
+            raise DomainError("Сообщение не может быть пустым")
         chat = self.state.chats.get(chat_id)
         if not chat:
             raise DomainError("Chat thread not found")

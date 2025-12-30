@@ -306,7 +306,11 @@ def serialize_equipment(equipment: EquipmentState) -> Dict[str, Any]:
 def deserialize_equipment(data: Dict[str, Any]) -> EquipmentState:
     slots = {slot: None for slot in EquipmentSlot}
     for key, value in data.items():
-        slots[EquipmentSlot(key)] = value
+        try:
+            slot = EquipmentSlot(key)
+        except ValueError:
+            continue
+        slots[slot] = value
     return EquipmentState(slots=slots)
 
 
