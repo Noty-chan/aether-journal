@@ -99,6 +99,32 @@ class CampaignService:
             )
         ]
 
+    def update_class_per_level_bonus(
+        self,
+        class_id: str,
+        per_level_bonus: dict,
+        actor_role: str = HOST_ROLE,
+    ) -> List[EventLogEntry]:
+        ensure_host(actor_role)
+        class_def = self.state.classes.get(class_id)
+        if not class_def:
+            raise DomainError("Class not found")
+        class_def.per_level_bonus.per_level_stat_delta = {
+            str(key): int(value) for key, value in per_level_bonus.items()
+        }
+        return [
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor=actor_role,
+                kind=EventKind.class_bonus_updated.value,
+                payload={
+                    "class_id": class_id,
+                    "per_level_bonus": class_def.per_level_bonus.per_level_stat_delta,
+                },
+            )
+        ]
+
     def add_item_instance(
         self,
         template_id: str,

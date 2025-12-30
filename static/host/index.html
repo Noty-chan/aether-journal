@@ -157,6 +157,24 @@
             <button id="rules-save" type="button">Сохранить правила</button>
           </div>
           <div class="hint" id="rules-status">Настройки не изменены.</div>
+          <div class="divider"></div>
+          <h3>Бонусы классов за уровень</h3>
+          <div class="form-row">
+            <label for="rules-class-select">Класс</label>
+            <select id="rules-class-select"></select>
+          </div>
+          <div class="form-row">
+            <label for="rules-class-bonus">Пер-уровневые бонусы (JSON)</label>
+            <textarea
+              id="rules-class-bonus"
+              rows="4"
+              placeholder='{"strength": 1, "agility": 0}'
+            ></textarea>
+          </div>
+          <div class="form-actions">
+            <button id="rules-class-save" type="button">Сохранить бонусы</button>
+          </div>
+          <div class="hint" id="rules-class-status">Изменений нет.</div>
         </section>
       </section>
 

@@ -604,6 +604,16 @@ function applySettingsUpdated(payload) {
   }
 }
 
+function applyClassBonusUpdated(payload) {
+  if (!payload?.class_id) {
+    return;
+  }
+  if (!state.classes[payload.class_id]) {
+    return;
+  }
+  state.classes[payload.class_id].per_level_bonus = payload.per_level_bonus || {};
+}
+
 function ensureContact(contactId) {
   if (!state.contacts[contactId]) {
     state.contacts[contactId] = {
@@ -702,6 +712,9 @@ function applyEvent(event) {
       break;
     case "settings.updated":
       applySettingsUpdated(event.payload);
+      break;
+    case "class.per_level_bonus.updated":
+      applyClassBonusUpdated(event.payload);
       break;
     default:
       break;

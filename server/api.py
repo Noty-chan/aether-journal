@@ -49,6 +49,10 @@ class SettingsUpdateRequest(BaseModel):
     stat_rule: StatRuleRequest
 
 
+class ClassBonusUpdateRequest(BaseModel):
+    per_level_bonus: Dict[str, int] = Field(default_factory=dict)
+
+
 class AddItemRequest(BaseModel):
     template_id: str
     qty: int = 1
@@ -298,6 +302,23 @@ async def update_settings(
             base_per_level=payload.stat_rule.base_per_level,
             bonus_every_5=payload.stat_rule.bonus_every_5,
             bonus_every_10=payload.stat_rule.bonus_every_10,
+            actor_role=HOST_ROLE,
+        ),
+    )
+
+
+@router.post(
+    "/host/classes/{class_id}/per-level-bonus",
+    dependencies=[Depends(require_token_role(HOST_ROLE))],
+)
+async def update_class_bonus(
+    class_id: str, payload: ClassBonusUpdateRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    return await _apply_service(
+        context,
+        lambda: context.service.update_class_per_level_bonus(
+            class_id=class_id,
+            per_level_bonus=payload.per_level_bonus,
             actor_role=HOST_ROLE,
         ),
     )
