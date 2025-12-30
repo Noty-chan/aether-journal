@@ -240,6 +240,14 @@ def deserialize_campaign_settings(data: Dict[str, Any]) -> CampaignSettings:
     stat_rule = data.get("stat_rule", {})
     raw_sections = data.get("sheet_sections")
     sheet_sections = []
+
+    def _safe_order(value: Any, fallback: int) -> int:
+        try:
+            order = int(value)
+        except (TypeError, ValueError):
+            return fallback
+        return order if order > 0 else fallback
+
     if isinstance(raw_sections, list):
         for index, section in enumerate(raw_sections):
             key = str(section.get("key", "")).strip()
@@ -250,7 +258,7 @@ def deserialize_campaign_settings(data: Dict[str, Any]) -> CampaignSettings:
                     key=key,
                     title=str(section.get("title", key)),
                     visible=bool(section.get("visible", True)),
-                    order=int(section.get("order", index + 1)),
+                    order=_safe_order(section.get("order"), index + 1),
                 )
             )
     return CampaignSettings(

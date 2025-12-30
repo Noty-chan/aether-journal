@@ -103,6 +103,14 @@ class CampaignService:
             }
         if sheet_sections is not None:
             normalized = []
+
+            def _safe_order(value, fallback: int) -> int:
+                try:
+                    order = int(value)
+                except (TypeError, ValueError):
+                    return fallback
+                return order if order > 0 else fallback
+
             for index, section in enumerate(sheet_sections):
                 key = str(section.get("key", "")).strip()
                 if not key:
@@ -112,7 +120,7 @@ class CampaignService:
                         key=key,
                         title=str(section.get("title", key)),
                         visible=bool(section.get("visible", True)),
-                        order=int(section.get("order", index + 1)),
+                        order=_safe_order(section.get("order"), index + 1),
                     )
                 )
             if normalized:
