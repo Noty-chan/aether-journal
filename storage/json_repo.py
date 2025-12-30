@@ -275,6 +275,14 @@ def serialize_character(character: Character) -> Dict[str, Any]:
 
 
 def deserialize_character(data: Dict[str, Any]) -> Character:
+    resources: Dict[str, tuple[int, int]] = {}
+    for key, values in data.get("resources", {}).items():
+        if not isinstance(values, (list, tuple)) or len(values) < 2:
+            continue
+        try:
+            resources[key] = (int(values[0]), int(values[1]))
+        except (TypeError, ValueError):
+            continue
     character = Character(
         id=str(data.get("id", new_id("char"))),
         name=str(data.get("name", "")),
@@ -283,10 +291,7 @@ def deserialize_character(data: Dict[str, Any]) -> Character:
         xp=int(data.get("xp", 0)),
         unspent_stat_points=int(data.get("unspent_stat_points", 0)),
         stats=dict(data.get("stats", {})),
-        resources={
-            key: (int(values[0]), int(values[1]))
-            for key, values in data.get("resources", {}).items()
-        },
+        resources=resources,
         currencies=dict(data.get("currencies", {})),
         reputations=dict(data.get("reputations", {})),
         equipment=deserialize_equipment(data.get("equipment", {})),

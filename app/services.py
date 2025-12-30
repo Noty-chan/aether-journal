@@ -360,6 +360,11 @@ class CampaignService:
     ) -> List[EventLogEntry]:
         ensure_player(actor_role)
         ensure_player_can_act(self.state.character)
+        inst = self.state.character.inventory.get(item_instance_id)
+        if not inst:
+            raise DomainError("Item instance not found in inventory")
+        if inst.template_id not in self.state.item_templates:
+            raise DomainError("Item template not found")
         return [
             EventLogEntry(
                 seq=0,
