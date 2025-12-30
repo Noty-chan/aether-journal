@@ -238,7 +238,10 @@ def ensure_quest_not_duplicated(
     active_quests: List[QuestInstance], template_id: str
 ) -> None:
     for quest in active_quests:
-        if quest.template_id == template_id and quest.status == QuestStatus.active:
+        if quest.template_id == template_id and quest.status in (
+            QuestStatus.active,
+            QuestStatus.hidden,
+        ):
             raise QuestError("Quest template already active; cannot duplicate")
 
 

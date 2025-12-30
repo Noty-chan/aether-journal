@@ -32,6 +32,7 @@ from domain.models import (
 from domain.services import (
     choose_message_option,
     ensure_quest_not_duplicated,
+    can_equip_item,
     equip_item as equip_item_domain,
     grant_levels,
     grant_xp_and_level,
@@ -282,6 +283,10 @@ class CampaignService:
         actor_role: str = HOST_ROLE,
     ) -> List[EventLogEntry]:
         ensure_host(actor_role)
+        if template_id not in self.state.item_templates:
+            raise DomainError("Item template not found")
+        if qty <= 0:
+            raise DomainError("Количество должно быть больше нуля")
         inst = ItemInstance(
             id=new_id("item"),
             template_id=template_id,
@@ -356,6 +361,15 @@ class CampaignService:
     ) -> List[EventLogEntry]:
         ensure_player(actor_role)
         ensure_player_can_act(self.state.character)
+        inst = self.state.character.inventory.get(item_instance_id)
+        if not inst:
+            raise DomainError("Item instance not found in inventory")
+        template = self.state.item_templates.get(inst.template_id)
+        if not template:
+            raise DomainError("Item template not found")
+        class_def = self._get_class_def()
+        if not can_equip_item(class_def, template, slot):
+            raise DomainError("Class restrictions or slot incompatibility")
         return [
             EventLogEntry(
                 seq=0,
@@ -413,6 +427,8 @@ class CampaignService:
         quest.status = new_status
         if new_status in (QuestStatus.completed, QuestStatus.failed):
             quest.completed_at = utcnow()
+        else:
+            quest.completed_at = None
         return [
             EventLogEntry(
                 seq=0,
@@ -521,6 +537,12 @@ class CampaignService:
         actor_role: str = HOST_ROLE,
     ) -> List[EventLogEntry]:
         ensure_host(actor_role)
+        if maximum < 0:
+            raise DomainError("Максимум ресурса не может быть отрицательным")
+        if current < 0:
+            raise DomainError("Текущее значение ресурса не может быть отрицательным")
+        if current > maximum:
+            raise DomainError("Текущее значение не может превышать максимум")
         old_current, old_max = self.state.character.resources.get(resource_id, (0, 0))
         self.state.character.resources[resource_id] = (int(current), int(maximum))
         return [
@@ -720,6 +742,9 @@ class CampaignService:
         else:
             ensure_player(actor_role)
             ensure_player_can_act(self.state.character)
+        text = (text or "").strip()
+        if not text:
+            raise DomainError("Сообщение не может быть пустым")
         chat = self.state.chats.get(chat_id)
         if not chat:
             raise DomainError("Chat thread not found")
