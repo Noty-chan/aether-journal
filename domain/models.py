@@ -163,6 +163,42 @@ def default_sheet_sections() -> List[SheetSectionSettings]:
     ]
 
 
+def normalize_sheet_sections(
+    raw_sections: Optional[List[Dict[str, Any]]],
+) -> List[SheetSectionSettings]:
+    if not raw_sections:
+        return default_sheet_sections()
+
+    def _safe_order(value: Any, fallback: int) -> int:
+        try:
+            order = int(value)
+        except (TypeError, ValueError):
+            return fallback
+        return order if order > 0 else fallback
+
+    normalized: List[SheetSectionSettings] = []
+    seen_keys = set()
+    for index, section in enumerate(raw_sections):
+        key = str(section.get("key", "")).strip()
+        if not key or key in seen_keys:
+            continue
+        normalized.append(
+            SheetSectionSettings(
+                key=key,
+                title=str(section.get("title", key)),
+                visible=bool(section.get("visible", True)),
+                order=_safe_order(section.get("order"), index + 1),
+            )
+        )
+        seen_keys.add(key)
+    if not normalized:
+        return default_sheet_sections()
+    normalized.sort(key=lambda item: item.order)
+    for index, section in enumerate(normalized, start=1):
+        section.order = index
+    return normalized
+
+
 @dataclass
 class CampaignSettings:
     xp_curve: "XPCurveExponential" = field(default_factory=lambda: XPCurveExponential())

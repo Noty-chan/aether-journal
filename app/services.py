@@ -24,10 +24,10 @@ from domain.models import (
     QuestInstance,
     QuestStatus,
     Rarity,
-    SheetSectionSettings,
     SystemMessage,
     chat_link_from_dict,
     chat_link_to_dict,
+    normalize_sheet_sections,
 )
 from domain.services import (
     choose_message_option,
@@ -102,30 +102,9 @@ class CampaignService:
                 "bonus_every_10": bonus_every_10,
             }
         if sheet_sections is not None:
-            normalized = []
-
-            def _safe_order(value, fallback: int) -> int:
-                try:
-                    order = int(value)
-                except (TypeError, ValueError):
-                    return fallback
-                return order if order > 0 else fallback
-
-            for index, section in enumerate(sheet_sections):
-                key = str(section.get("key", "")).strip()
-                if not key:
-                    continue
-                normalized.append(
-                    SheetSectionSettings(
-                        key=key,
-                        title=str(section.get("title", key)),
-                        visible=bool(section.get("visible", True)),
-                        order=_safe_order(section.get("order"), index + 1),
-                    )
-                )
-            if normalized:
-                self.state.settings.sheet_sections = normalized
-                payload["sheet_sections"] = [asdict(section) for section in normalized]
+            normalized = normalize_sheet_sections(sheet_sections)
+            self.state.settings.sheet_sections = normalized
+            payload["sheet_sections"] = [asdict(section) for section in normalized]
         if not payload:
             return []
         return [

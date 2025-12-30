@@ -39,6 +39,7 @@ const rulesClassSaveBtn = document.getElementById("rules-class-save");
 const rulesClassStatusEl = document.getElementById("rules-class-status");
 const sheetSettingsContainer = document.getElementById("sheet-settings");
 const sheetSettingsSaveBtn = document.getElementById("sheet-settings-save");
+const sheetSettingsResetBtn = document.getElementById("sheet-settings-reset");
 const sheetSettingsStatusEl = document.getElementById("sheet-settings-status");
 const itemTemplateNameInput = document.getElementById("item-template-name");
 const itemTemplateTypeSelect = document.getElementById("item-template-type");
@@ -727,6 +728,8 @@ function applySettingsUpdated(payload) {
   }
   if (payload.sheet_sections) {
     state.settings.sheet_sections = payload.sheet_sections;
+    state.sheetSectionsKey = "";
+    state.sheetSettingsKey = "";
   }
   renderSettings();
 }
@@ -1081,10 +1084,26 @@ function renderSheetSettings() {
     visibleLabel.appendChild(visibleInput);
     visibleLabel.appendChild(visibleText);
 
+    const moveWrap = document.createElement("div");
+    moveWrap.className = "sheet-settings__move";
+    const moveUp = document.createElement("button");
+    moveUp.type = "button";
+    moveUp.className = "ghost sheet-settings__move-btn";
+    moveUp.textContent = "↑";
+    moveUp.dataset.move = "up";
+    const moveDown = document.createElement("button");
+    moveDown.type = "button";
+    moveDown.className = "ghost sheet-settings__move-btn";
+    moveDown.textContent = "↓";
+    moveDown.dataset.move = "down";
+    moveWrap.appendChild(moveUp);
+    moveWrap.appendChild(moveDown);
+
     row.appendChild(label);
     row.appendChild(titleInput);
     row.appendChild(orderInput);
     row.appendChild(visibleLabel);
+    row.appendChild(moveWrap);
     sheetSettingsContainer.appendChild(row);
   });
   state.sheetSettingsKey = key;
@@ -2003,33 +2022,19 @@ async function updateRulesSettings() {
   }
 }
 
-async function updateSheetSettings() {
+async function submitSheetSettings(sections) {
   const token = getToken();
   if (!token) {
     setSheetSettingsStatus("Укажите токен", "error");
     return;
   }
-  if (!sheetSettingsContainer) {
-    return;
-  }
-  const rows = Array.from(sheetSettingsContainer.querySelectorAll(".sheet-settings__row"));
-  const sections = rows.map((row, index) => {
-    const titleInput = row.querySelector('[data-field="title"]');
-    const orderInput = row.querySelector('[data-field="order"]');
-    const visibleInput = row.querySelector('[data-field="visible"]');
-    const orderValue = Number(orderInput?.value);
-    return {
-      key: row.dataset.key || "",
-      title: titleInput?.value?.trim() || row.dataset.key || "",
-      visible: Boolean(visibleInput?.checked),
-      order: Number.isFinite(orderValue) ? orderValue : index + 1,
-    };
-  });
   if (!sections.length) {
     setSheetSettingsStatus("Нет секций для сохранения", "error");
     return;
   }
-  sheetSettingsSaveBtn.disabled = true;
+  if (sheetSettingsSaveBtn) {
+    sheetSettingsSaveBtn.disabled = true;
+  }
   setSheetSettingsStatus("Сохранение...");
   try {
     const response = await fetch("/api/host/settings", {
@@ -2050,8 +2055,53 @@ async function updateSheetSettings() {
   } catch (error) {
     setSheetSettingsStatus(error.message, "error");
   } finally {
-    sheetSettingsSaveBtn.disabled = false;
+    if (sheetSettingsSaveBtn) {
+      sheetSettingsSaveBtn.disabled = false;
+    }
   }
+}
+
+async function updateSheetSettings() {
+  if (!sheetSettingsContainer) {
+    return;
+  }
+  const rows = Array.from(sheetSettingsContainer.querySelectorAll(".sheet-settings__row"));
+  const sections = rows.map((row, index) => {
+    const titleInput = row.querySelector('[data-field="title"]');
+    const orderInput = row.querySelector('[data-field="order"]');
+    const visibleInput = row.querySelector('[data-field="visible"]');
+    const orderValue = Number(orderInput?.value);
+    return {
+      key: row.dataset.key || "",
+      title: titleInput?.value?.trim() || row.dataset.key || "",
+      visible: Boolean(visibleInput?.checked),
+      order: Number.isFinite(orderValue) ? orderValue : index + 1,
+    };
+  });
+  await submitSheetSettings(sections);
+}
+
+function swapSheetOrder(row, direction) {
+  if (!sheetSettingsContainer) {
+    return;
+  }
+  const rows = Array.from(sheetSettingsContainer.querySelectorAll(".sheet-settings__row"));
+  const index = rows.indexOf(row);
+  if (index === -1) {
+    return;
+  }
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= rows.length) {
+    return;
+  }
+  const currentOrder = row.querySelector('[data-field="order"]');
+  const targetOrder = rows[targetIndex].querySelector('[data-field="order"]');
+  if (!currentOrder || !targetOrder) {
+    return;
+  }
+  const temp = currentOrder.value;
+  currentOrder.value = targetOrder.value;
+  targetOrder.value = temp;
 }
 
 async function updateClassBonus() {
@@ -2317,6 +2367,29 @@ if (rulesSaveBtn) {
 
 if (sheetSettingsSaveBtn) {
   sheetSettingsSaveBtn.addEventListener("click", updateSheetSettings);
+}
+
+if (sheetSettingsResetBtn) {
+  sheetSettingsResetBtn.addEventListener("click", async () => {
+    if (!sheetSettingsContainer) {
+      return;
+    }
+    await submitSheetSettings(DEFAULT_SHEET_SECTIONS.map((section) => ({ ...section })));
+  });
+}
+
+if (sheetSettingsContainer) {
+  sheetSettingsContainer.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-move]");
+    if (!button) {
+      return;
+    }
+    const row = button.closest(".sheet-settings__row");
+    if (!row) {
+      return;
+    }
+    swapSheetOrder(row, button.dataset.move);
+  });
 }
 
 if (rulesClassSaveBtn) {

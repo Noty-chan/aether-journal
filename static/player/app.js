@@ -618,6 +618,7 @@ function applySettingsUpdated(payload) {
   }
   if (payload.sheet_sections) {
     state.settings.sheet_sections = payload.sheet_sections;
+    state.sheetSectionsKey = "";
   }
 }
 

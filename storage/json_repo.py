@@ -31,12 +31,12 @@ from domain.models import (
     QuestInstance,
     QuestTemplate,
     Rarity,
-    SheetSectionSettings,
-    default_sheet_sections,
     SystemMessage,
     MessageTemplate,
     chat_link_from_dict,
     chat_link_to_dict,
+    default_sheet_sections,
+    normalize_sheet_sections,
 )
 from domain.rules import ClassPerLevelBonus, StatPointRule, XPCurveExponential
 
@@ -239,28 +239,7 @@ def deserialize_campaign_settings(data: Dict[str, Any]) -> CampaignSettings:
     xp_curve = data.get("xp_curve", {})
     stat_rule = data.get("stat_rule", {})
     raw_sections = data.get("sheet_sections")
-    sheet_sections = []
-
-    def _safe_order(value: Any, fallback: int) -> int:
-        try:
-            order = int(value)
-        except (TypeError, ValueError):
-            return fallback
-        return order if order > 0 else fallback
-
-    if isinstance(raw_sections, list):
-        for index, section in enumerate(raw_sections):
-            key = str(section.get("key", "")).strip()
-            if not key:
-                continue
-            sheet_sections.append(
-                SheetSectionSettings(
-                    key=key,
-                    title=str(section.get("title", key)),
-                    visible=bool(section.get("visible", True)),
-                    order=_safe_order(section.get("order"), index + 1),
-                )
-            )
+    sheet_sections = normalize_sheet_sections(raw_sections if isinstance(raw_sections, list) else None)
     return CampaignSettings(
         xp_curve=XPCurveExponential(
             base_xp=int(xp_curve.get("base_xp", 200)),

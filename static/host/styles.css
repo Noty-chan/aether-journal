@@ -306,7 +306,7 @@ button:disabled {
 
 .sheet-settings__row {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(180px, 2fr) 90px 120px;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 2fr) 90px 120px 92px;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
@@ -331,6 +331,17 @@ button:disabled {
   gap: 8px;
   font-size: 13px;
   color: #cbd5f5;
+}
+
+.sheet-settings__move {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.sheet-settings__move button {
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 .list {
