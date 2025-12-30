@@ -411,6 +411,143 @@ button:disabled {
   gap: 12px;
 }
 
+.chat-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 20px;
+}
+
+.chat-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-threads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-thread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0f131c;
+  border: 1px solid #242b3a;
+  cursor: pointer;
+}
+
+.chat-thread.active {
+  border-color: #4b74ff;
+  box-shadow: 0 0 0 1px rgba(75, 116, 255, 0.4);
+}
+
+.chat-thread__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-thread__title {
+  font-weight: 600;
+}
+
+.chat-thread__status {
+  color: #9aa3b2;
+  font-size: 12px;
+}
+
+.chat-panel {
+  background: #0f131c;
+  border: 1px solid #2a3142;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-panel__header {
+  font-weight: 600;
+}
+
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.chat-message {
+  background: #111827;
+  border: 1px solid #2a3142;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-message__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #9aa3b2;
+}
+
+.chat-message__sender {
+  font-weight: 600;
+  color: #cbd5f5;
+}
+
+.chat-message__text {
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+.chat-message__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-link-tag {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #1f2937;
+  color: #cbd5f5;
+}
+
+.chat-links__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-links__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #1f2937;
+  color: #cbd5f5;
+  font-size: 12px;
+}
+
+.chat-links__item button {
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
 .log-list {
   display: flex;
   flex-direction: column;

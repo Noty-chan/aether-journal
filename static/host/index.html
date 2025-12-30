@@ -37,6 +37,7 @@
         <button class="tab" type="button" data-tab="messages">
           Системные сообщения
         </button>
+        <button class="tab" type="button" data-tab="chat">Чат</button>
         <button class="tab" type="button" data-tab="log">Лог</button>
       </div>
 
@@ -319,6 +320,79 @@
             <span class="meta" id="messages-count">0</span>
           </div>
           <div class="messages" id="system-messages"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="chat" hidden>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Контакты и чат</h2>
+            <span class="meta" id="chat-summary">Контактов: 0 · Чатов: 0</span>
+          </div>
+          <div class="chat-grid">
+            <div class="chat-column">
+              <h3>Контакты</h3>
+              <div class="form-row">
+                <label for="chat-contact-name">Имя контакта</label>
+                <input
+                  id="chat-contact-name"
+                  type="text"
+                  placeholder="Напр. NPC Элла"
+                />
+              </div>
+              <div class="form-row">
+                <label for="chat-contact-payload">Payload контакта (JSON)</label>
+                <textarea
+                  id="chat-contact-payload"
+                  rows="3"
+                  placeholder='{"class": "merchant"}'
+                ></textarea>
+              </div>
+              <div class="form-actions">
+                <button id="chat-contact-add" type="button">Создать контакт</button>
+              </div>
+              <div class="hint" id="chat-contact-status">Готово к созданию.</div>
+              <div class="divider"></div>
+              <div class="list" id="chat-contacts-list"></div>
+            </div>
+            <div class="chat-column">
+              <h3>Чаты</h3>
+              <div class="chat-threads" id="chat-threads-list"></div>
+              <div class="chat-panel">
+                <div class="chat-panel__header" id="chat-active-title">
+                  Выберите чат
+                </div>
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-composer">
+                  <div class="form-row">
+                    <label for="chat-message-text">Сообщение</label>
+                    <textarea id="chat-message-text" rows="3"></textarea>
+                  </div>
+                  <div class="chat-links">
+                    <div class="form-row inline">
+                      <label for="chat-link-type">Ссылка</label>
+                      <select id="chat-link-type">
+                        <option value="npc">NPC</option>
+                        <option value="quest">Квест</option>
+                        <option value="item">Предмет</option>
+                      </select>
+                      <select id="chat-link-entity"></select>
+                      <button id="chat-link-add" type="button" class="ghost">
+                        Добавить
+                      </button>
+                    </div>
+                    <div class="chat-links__list" id="chat-links-list"></div>
+                  </div>
+                  <div class="form-actions">
+                    <button id="chat-message-send" type="button">Отправить</button>
+                  </div>
+                  <div class="hint" id="chat-message-status">
+                    Выберите чат для отправки.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
       </section>
 
