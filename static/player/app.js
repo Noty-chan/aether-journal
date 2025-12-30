@@ -12,6 +12,7 @@ const xpCurrentEl = document.getElementById("xp-current");
 const xpNextEl = document.getElementById("xp-next");
 const xpFillEl = document.getElementById("xp-fill");
 const freezeStatusEl = document.getElementById("freeze-status");
+const statsStatusEl = document.getElementById("stats-status");
 const sheetSectionsContainer = document.getElementById("sheet-sections");
 const inventoryList = document.getElementById("inventory-list");
 const inventoryCountEl = document.getElementById("inventory-count");
@@ -103,6 +104,17 @@ function setStatus(message, variant = "") {
   statusEl.classList.remove("status--ok", "status--error");
   if (variant) {
     statusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setStatsStatus(message, variant = "") {
+  if (!statsStatusEl) {
+    return;
+  }
+  statsStatusEl.textContent = message;
+  statsStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    statsStatusEl.classList.add(`status--${variant}`);
   }
 }
 
@@ -273,6 +285,8 @@ function describeEvent(event) {
       })`;
     case "level.up":
       return `Уровень ${payload.new_level ?? "?"} (+${payload.stat_points_gained ?? 0} оч.)`;
+    case "stat.allocated":
+      return `Распределены очки: ${payload.stat_id || "—"} +${payload.amount ?? 0}`;
     case "inventory.added": {
       const template = state.templates?.[payload.template_id];
       const name = template?.name || payload.template_id || "предмет";
@@ -439,12 +453,31 @@ function applyLevelUpEvent(payload) {
   const gained = Number(payload.stat_points_gained ?? 0);
   state.character.unspent_stat_points =
     Number(state.character.unspent_stat_points ?? 0) + gained;
+  const newLevel = Number(payload.new_level ?? state.character.level ?? 0);
+  if (!Number.isNaN(newLevel) && newLevel > Number(state.character.level ?? 0)) {
+    state.character.level = newLevel;
+  }
   const classDef = state.classes?.[state.character.class_id];
   const bonus = classDef?.per_level_bonus ?? {};
   Object.entries(bonus).forEach(([stat, delta]) => {
     const current = Number(state.character.stats?.[stat] ?? 0);
     state.character.stats[stat] = current + Number(delta);
   });
+}
+
+function applyStatAllocated(payload) {
+  if (!state.character) {
+    return;
+  }
+  const statId = payload.stat_id;
+  if (!statId) {
+    return;
+  }
+  if (!state.character.stats) {
+    state.character.stats = {};
+  }
+  state.character.stats[statId] = Number(payload.new_value ?? payload.value ?? 0);
+  state.character.unspent_stat_points = Number(payload.remaining_points ?? 0);
 }
 
 function applyInventoryAdded(payload) {
@@ -809,6 +842,9 @@ function applyEvent(event) {
     case "level.up":
       applyLevelUpEvent(event.payload);
       break;
+    case "stat.allocated":
+      applyStatAllocated(event.payload);
+      break;
     case "inventory.added":
       applyInventoryAdded(event.payload);
       break;
@@ -1057,6 +1093,48 @@ function renderList(container, items, emptyMessage) {
   });
 }
 
+function renderStatsList(container, items, options) {
+  const { emptyMessage, unspent, frozen } = options;
+  container.innerHTML = "";
+  if (!items || items.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "list__item";
+    empty.textContent = emptyMessage;
+    container.appendChild(empty);
+  }
+  items.forEach(({ label, value }) => {
+    const row = document.createElement("div");
+    row.className = "list__item list__item--stat";
+    const name = document.createElement("span");
+    name.textContent = label;
+    const val = document.createElement("span");
+    val.textContent = value;
+    const actions = document.createElement("div");
+    actions.className = "list__item-actions";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost";
+    button.textContent = "+1";
+    button.disabled = frozen || unspent <= 0;
+    button.addEventListener("click", () => allocateStatPoints(label, 1));
+    actions.appendChild(button);
+    row.appendChild(name);
+    row.appendChild(val);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+
+  const unspentRow = document.createElement("div");
+  unspentRow.className = "list__item list__item--summary";
+  const unspentLabel = document.createElement("span");
+  unspentLabel.textContent = "Нераспр. очки";
+  const unspentValue = document.createElement("span");
+  unspentValue.textContent = unspent ?? 0;
+  unspentRow.appendChild(unspentLabel);
+  unspentRow.appendChild(unspentValue);
+  container.appendChild(unspentRow);
+}
+
 function getSheetSectionsConfig() {
   const configured = state.settings?.sheet_sections;
   if (Array.isArray(configured) && configured.length > 0) {
@@ -1140,10 +1218,6 @@ function renderSheet() {
     label: key,
     value,
   }));
-  stats.push({
-    label: "Нераспр. очки",
-    value: state.character.unspent_stat_points ?? 0,
-  });
 
   const resources = Object.entries(state.character.resources || {}).map(
     ([key, value]) => ({
@@ -1159,7 +1233,11 @@ function renderSheet() {
   );
 
   if (state.sheetSectionNodes.stats) {
-    renderList(state.sheetSectionNodes.stats.list, stats, state.sheetSectionNodes.stats.empty);
+    renderStatsList(state.sheetSectionNodes.stats.list, stats, {
+      emptyMessage: state.sheetSectionNodes.stats.empty,
+      unspent: state.character.unspent_stat_points ?? 0,
+      frozen: Boolean(state.character.frozen),
+    });
   }
   if (state.sheetSectionNodes.resources) {
     renderList(
@@ -1724,6 +1802,136 @@ function renderChatThreads() {
     });
 }
 
+function formatLinkType(kind, payload = {}) {
+  if (kind === "npc") {
+    const type = payload.type || payload.role || payload.profile_type || "npc";
+    return type === "player" ? "Игрок" : "NPC";
+  }
+  if (kind === "quest") {
+    return "Квест";
+  }
+  if (kind === "item") {
+    return "Предмет";
+  }
+  return kind || "Ссылка";
+}
+
+function formatStatMods(statMods) {
+  if (!statMods || typeof statMods !== "object") {
+    return "";
+  }
+  const entries = Object.entries(statMods)
+    .filter(([, value]) => Number(value))
+    .map(([key, value]) => `${key}: ${value > 0 ? "+" : ""}${value}`);
+  return entries.join(", ");
+}
+
+function buildChatLinkCard(link) {
+  const payload = link.payload || {};
+  const kind = link.kind || link.type || "";
+  const card = document.createElement("div");
+  card.className = "chat-link-card";
+
+  const header = document.createElement("div");
+  header.className = "chat-link-card__header";
+  const title = document.createElement("div");
+  title.className = "chat-link-card__title";
+  title.textContent = link.title || link.label || link.id || "Ссылка";
+  const typeTag = document.createElement("span");
+  typeTag.className = "tag";
+  typeTag.textContent = formatLinkType(kind, payload);
+  header.appendChild(title);
+  header.appendChild(typeTag);
+
+  const meta = document.createElement("div");
+  meta.className = "chat-link-card__meta";
+  const metaItems = [];
+  if (kind === "npc") {
+    const className = payload.class_name || payload.class || payload.class_id;
+    const level = payload.level;
+    const hpCurrent = payload.hp_current ?? payload.hp?.current ?? payload.hp?.value;
+    const hpMax = payload.hp_max ?? payload.hp?.max;
+    if (className) {
+      metaItems.push(`Класс: ${className}`);
+    }
+    if (level != null) {
+      metaItems.push(`Уровень: ${level}`);
+    }
+    if (hpCurrent != null || hpMax != null) {
+      metaItems.push(
+        `HP: ${hpCurrent != null ? hpCurrent : "—"}${hpMax != null ? `/${hpMax}` : ""}`,
+      );
+    }
+  }
+  if (kind === "quest") {
+    if (payload.objectives?.length) {
+      metaItems.push(`Цели: ${payload.objectives.length}`);
+    }
+    if (payload.cannot_decline) {
+      metaItems.push("Нельзя отказаться");
+    }
+  }
+  if (kind === "item") {
+    if (payload.rarity) {
+      metaItems.push(`Редкость: ${payload.rarity}`);
+    }
+    if (payload.item_type) {
+      metaItems.push(`Тип: ${payload.item_type}`);
+    }
+    const mods = formatStatMods(payload.stat_mods);
+    if (mods) {
+      metaItems.push(`Бонусы: ${mods}`);
+    }
+  }
+  metaItems.forEach((text) => {
+    const line = document.createElement("div");
+    line.textContent = text;
+    meta.appendChild(line);
+  });
+
+  const body = document.createElement("div");
+  body.className = "chat-link-card__body";
+  const description =
+    payload.description || payload.summary || payload.note || payload.details || "";
+  if (description) {
+    const desc = document.createElement("div");
+    desc.textContent = description;
+    body.appendChild(desc);
+  }
+
+  if (kind === "quest" && Array.isArray(payload.objectives) && payload.objectives.length) {
+    const list = document.createElement("ul");
+    list.className = "chat-link-card__list";
+    payload.objectives.slice(0, 3).forEach((objective) => {
+      const item = document.createElement("li");
+      item.textContent = objective.text || "Цель";
+      list.appendChild(item);
+    });
+    body.appendChild(list);
+  }
+
+  if (kind === "item" && Array.isArray(payload.tags) && payload.tags.length) {
+    const tags = document.createElement("div");
+    tags.className = "chat-link-card__tags";
+    payload.tags.forEach((tagText) => {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = tagText;
+      tags.appendChild(tag);
+    });
+    body.appendChild(tags);
+  }
+
+  card.appendChild(header);
+  if (meta.childElementCount) {
+    card.appendChild(meta);
+  }
+  if (body.childElementCount) {
+    card.appendChild(body);
+  }
+  return card;
+}
+
 function renderChatMessages() {
   if (!chatMessagesList) {
     return;
@@ -1772,13 +1980,17 @@ function renderChatMessages() {
     if (message.links?.length) {
       const links = document.createElement("div");
       links.className = "chat-message__links";
+      const cards = document.createElement("div");
+      cards.className = "chat-message__cards";
       message.links.forEach((link) => {
         const tag = document.createElement("div");
         tag.className = "chat-link-tag";
         tag.textContent = `${link.title || link.label || link.id} (${link.kind || link.type})`;
         links.appendChild(tag);
+        cards.appendChild(buildChatLinkCard(link));
       });
       item.appendChild(links);
+      item.appendChild(cards);
     }
 
     chatMessagesList.appendChild(item);
@@ -2027,6 +2239,42 @@ async function requestEquip(itemId, slot, button) {
     setStatus(error.message, "error");
   } finally {
     button.disabled = false;
+  }
+}
+
+async function allocateStatPoints(statId, amount) {
+  const token = getToken();
+  if (!token) {
+    setStatsStatus("Укажите токен", "error");
+    return;
+  }
+  if (!statId) {
+    setStatsStatus("Стата не выбрана", "error");
+    return;
+  }
+  if (!amount || amount <= 0) {
+    setStatsStatus("Нужно больше очков", "error");
+    return;
+  }
+  setStatsStatus("Распределяем...");
+  try {
+    const response = await fetch("/api/player/stats/allocate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ stat_id: statId, amount }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось распределить очки");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setStatsStatus("Очки распределены", "ok");
+  } catch (error) {
+    setStatsStatus(error.message, "error");
   }
 }
 

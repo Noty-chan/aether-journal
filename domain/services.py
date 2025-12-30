@@ -110,6 +110,61 @@ def grant_xp_and_level(
     return messages, events
 
 
+def grant_levels(
+    character: Character,
+    levels: int,
+    stat_rule: StatPointRule,
+    class_def: ClassDefinition,
+) -> Tuple[List[SystemMessage], List[EventLogEntry]]:
+    if levels <= 0:
+        return [], []
+
+    old_level = character.level
+    new_level = old_level + levels
+    character.level = new_level
+
+    messages: List[SystemMessage] = []
+    events: List[EventLogEntry] = []
+
+    gained_pts = stat_rule.points_for_range(old_level, new_level)
+    character.unspent_stat_points += gained_pts
+
+    class_def.per_level_bonus.apply_for_levels(character.stats, old_level, new_level)
+
+    for level in range(old_level + 1, new_level + 1):
+        pts_level = stat_rule.points_on_level(level)
+        events.append(
+            EventLogEntry(
+                seq=0,
+                ts=utcnow(),
+                actor="system",
+                kind=EventKind.level_up.value,
+                payload={
+                    "character_id": character.id,
+                    "new_level": level,
+                    "stat_points_gained": pts_level,
+                },
+            )
+        )
+        messages.append(
+            SystemMessage(
+                id=new_id("msg"),
+                created_at=utcnow(),
+                severity=MessageSeverity.alert,
+                title="LEVEL UP",
+                body=(
+                    f"Достигнут уровень {level}. Получено очков характеристик: {pts_level}."
+                ),
+                collapsible=False,
+                choices=[],
+                sound=MessageSeverity.alert,
+                effect="level_up",
+            )
+        )
+
+    return messages, events
+
+
 
 def can_equip_item(
     class_def: ClassDefinition, tpl: ItemTemplate, slot: EquipmentSlot
