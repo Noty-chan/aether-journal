@@ -589,6 +589,21 @@ function applyFreeze(payload) {
   state.character.frozen = Boolean(payload.frozen);
 }
 
+function applySettingsUpdated(payload) {
+  if (!payload) {
+    return;
+  }
+  if (!state.settings) {
+    state.settings = {};
+  }
+  if (payload.xp_curve) {
+    state.settings.xp_curve = payload.xp_curve;
+  }
+  if (payload.stat_rule) {
+    state.settings.stat_rule = payload.stat_rule;
+  }
+}
+
 function ensureContact(contactId) {
   if (!state.contacts[contactId]) {
     state.contacts[contactId] = {
@@ -684,6 +699,9 @@ function applyEvent(event) {
       break;
     case "ability.removed":
       applyAbilityRemoved(event.payload);
+      break;
+    case "settings.updated":
+      applySettingsUpdated(event.payload);
       break;
     default:
       break;

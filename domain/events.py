@@ -25,6 +25,7 @@ class EventKind(str, Enum):
     ability_added = "ability.added"
     ability_updated = "ability.updated"
     ability_removed = "ability.removed"
+    settings_updated = "settings.updated"
     chat_contact_added = "chat.contact.added"
     chat_friend_request_sent = "chat.friend_request.sent"
     chat_friend_request_accepted = "chat.friend_request.accepted"

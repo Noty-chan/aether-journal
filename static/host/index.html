@@ -30,6 +30,7 @@
 
       <div class="tabs" role="tablist">
         <button class="tab active" type="button" data-tab="sheet">Персонаж</button>
+        <button class="tab" type="button" data-tab="rules">Правила</button>
         <button class="tab" type="button" data-tab="quests">Квесты</button>
         <button class="tab" type="button" data-tab="abilities">Способности</button>
         <button class="tab" type="button" data-tab="messages">
@@ -123,6 +124,39 @@
             </div>
             <div class="equipment__grid" id="equipment-grid"></div>
           </section>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="rules" hidden>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Правила кампании</h2>
+            <span class="meta">Редактирование XP и очков статов</span>
+          </div>
+          <div class="form-row">
+            <label for="rules-base-xp">Базовый XP за уровень</label>
+            <input id="rules-base-xp" type="number" min="1" />
+          </div>
+          <div class="form-row">
+            <label for="rules-growth-rate">Коэффициент роста XP</label>
+            <input id="rules-growth-rate" type="number" step="0.01" min="0.01" />
+          </div>
+          <div class="form-row">
+            <label for="rules-base-per-level">Очков статов за уровень</label>
+            <input id="rules-base-per-level" type="number" min="0" />
+          </div>
+          <div class="form-row">
+            <label for="rules-bonus-every-5">Бонус каждые 5 уровней</label>
+            <input id="rules-bonus-every-5" type="number" min="0" />
+          </div>
+          <div class="form-row">
+            <label for="rules-bonus-every-10">Бонус каждые 10 уровней</label>
+            <input id="rules-bonus-every-10" type="number" min="0" />
+          </div>
+          <div class="form-actions">
+            <button id="rules-save" type="button">Сохранить правила</button>
+          </div>
+          <div class="hint" id="rules-status">Настройки не изменены.</div>
         </section>
       </section>
 

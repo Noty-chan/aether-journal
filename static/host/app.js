@@ -29,6 +29,13 @@ const messagesList = document.getElementById("system-messages");
 const messagesCountEl = document.getElementById("messages-count");
 const logList = document.getElementById("event-log");
 const logCountEl = document.getElementById("log-count");
+const rulesBaseXpInput = document.getElementById("rules-base-xp");
+const rulesGrowthRateInput = document.getElementById("rules-growth-rate");
+const rulesBasePerLevelInput = document.getElementById("rules-base-per-level");
+const rulesBonusEvery5Input = document.getElementById("rules-bonus-every-5");
+const rulesBonusEvery10Input = document.getElementById("rules-bonus-every-10");
+const rulesSaveBtn = document.getElementById("rules-save");
+const rulesStatusEl = document.getElementById("rules-status");
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -82,6 +89,17 @@ function setXpStatus(message, variant = "") {
   xpStatusEl.classList.remove("status--ok", "status--error");
   if (variant) {
     xpStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setRulesStatus(message, variant = "") {
+  if (!rulesStatusEl) {
+    return;
+  }
+  rulesStatusEl.textContent = message;
+  rulesStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    rulesStatusEl.classList.add(`status--${variant}`);
   }
 }
 
@@ -600,6 +618,22 @@ function applyFreeze(payload) {
   state.character.frozen = Boolean(payload.frozen);
 }
 
+function applySettingsUpdated(payload) {
+  if (!payload) {
+    return;
+  }
+  if (!state.settings) {
+    state.settings = {};
+  }
+  if (payload.xp_curve) {
+    state.settings.xp_curve = payload.xp_curve;
+  }
+  if (payload.stat_rule) {
+    state.settings.stat_rule = payload.stat_rule;
+  }
+  renderSettings();
+}
+
 function applyEvent(event) {
   switch (event.kind) {
     case "xp.granted":
@@ -650,6 +684,9 @@ function applyEvent(event) {
       break;
     case "ability.removed":
       applyAbilityRemoved(event.payload);
+      break;
+    case "settings.updated":
+      applySettingsUpdated(event.payload);
       break;
     default:
       break;
@@ -1362,6 +1399,27 @@ function renderMessages() {
   });
 }
 
+function renderSettings() {
+  if (!state.settings) {
+    return;
+  }
+  if (rulesBaseXpInput) {
+    rulesBaseXpInput.value = state.settings.xp_curve?.base_xp ?? "";
+  }
+  if (rulesGrowthRateInput) {
+    rulesGrowthRateInput.value = state.settings.xp_curve?.growth_rate ?? "";
+  }
+  if (rulesBasePerLevelInput) {
+    rulesBasePerLevelInput.value = state.settings.stat_rule?.base_per_level ?? "";
+  }
+  if (rulesBonusEvery5Input) {
+    rulesBonusEvery5Input.value = state.settings.stat_rule?.bonus_every_5 ?? "";
+  }
+  if (rulesBonusEvery10Input) {
+    rulesBonusEvery10Input.value = state.settings.stat_rule?.bonus_every_10 ?? "";
+  }
+}
+
 function render() {
   if (!state.character) {
     return;
@@ -1375,6 +1433,7 @@ function render() {
   renderAbilities();
   renderMessages();
   renderLog();
+  renderSettings();
   if (questCountEl) {
     questCountEl.textContent = `${state.activeQuests?.length || 0}`;
   }
@@ -1518,6 +1577,53 @@ async function grantXp(amount) {
   }
 }
 
+async function updateRulesSettings() {
+  const token = getToken();
+  if (!token) {
+    setRulesStatus("Укажите токен", "error");
+    return;
+  }
+  const baseXp = Number(rulesBaseXpInput?.value);
+  const growthRate = Number(rulesGrowthRateInput?.value);
+  const basePerLevel = Number(rulesBasePerLevelInput?.value);
+  const bonusEvery5 = Number(rulesBonusEvery5Input?.value);
+  const bonusEvery10 = Number(rulesBonusEvery10Input?.value);
+  if (!baseXp || baseXp <= 0 || !growthRate || growthRate <= 0) {
+    setRulesStatus("Проверьте значения XP", "error");
+    return;
+  }
+  rulesSaveBtn.disabled = true;
+  setRulesStatus("Сохранение...");
+  try {
+    const response = await fetch("/api/host/settings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        xp_curve: { base_xp: baseXp, growth_rate: growthRate },
+        stat_rule: {
+          base_per_level: basePerLevel,
+          bonus_every_5: bonusEvery5,
+          bonus_every_10: bonusEvery10,
+        },
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось сохранить правила");
+    }
+    const payload = await response.json();
+    applyEvents(payload.events || []);
+    setRulesStatus("Правила обновлены", "ok");
+  } catch (error) {
+    setRulesStatus(error.message, "error");
+  } finally {
+    rulesSaveBtn.disabled = false;
+  }
+}
+
 connectBtn.addEventListener("click", fetchSnapshot);
 refreshBtn.addEventListener("click", fetchSnapshot);
 
@@ -1537,6 +1643,10 @@ document.querySelectorAll("[data-xp]").forEach((button) => {
     grantXp(amount);
   });
 });
+
+if (rulesSaveBtn) {
+  rulesSaveBtn.addEventListener("click", updateRulesSettings);
+}
 
 const storedToken = localStorage.getItem("hostToken");
 if (storedToken) {
