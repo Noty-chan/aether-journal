@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "snapshot": {
+    "id": "campaign_demo",
+    "character": {
+      "id": "char_demo",
+      "name": "Герой",
+      "class_id": "adventurer",
+      "level": 1,
+      "xp": 0,
+      "unspent_stat_points": 0,
+      "stats": {
+        "str": 1,
+        "agi": 1,
+        "int": 1
+      },
+      "resources": {},
+      "currencies": {
+        "gold": 12
+      },
+      "reputations": {},
+      "equipment": {
+        "weapon_1": null,
+        "weapon_2": null,
+        "head": null,
+        "torso": null,
+        "legs": null,
+        "boots": null,
+        "ring_1": null,
+        "ring_2": null
+      },
+      "inventory": {},
+      "abilities": {},
+      "frozen": false
+    },
+    "classes": {
+      "adventurer": {
+        "id": "adventurer",
+        "name": "Путник",
+        "description": "Универсальный класс для старта.",
+        "allowed_item_types": [
+          "weapon",
+          "armor",
+          "accessory",
+          "consumable",
+          "quest",
+          "misc"
+        ],
+        "allowed_slots": [
+          "weapon_1",
+          "weapon_2",
+          "head",
+          "torso",
+          "legs",
+          "boots",
+          "ring_1",
+          "ring_2"
+        ],
+        "per_level_bonus": {}
+      }
+    },
+    "item_templates": {
+      "item_tpl_rusty_sword": {
+        "id": "item_tpl_rusty_sword",
+        "name": "Ржавый меч",
+        "item_type": "weapon",
+        "rarity": "white",
+        "description": "Старый меч, но все еще держит удар.",
+        "icon_key": null,
+        "equip_slots": [
+          "weapon_1"
+        ],
+        "two_handed": false,
+        "stat_mods": {
+          "str": 1
+        },
+        "granted_ability_ids": [],
+        "tags": [
+          "старт"
+        ]
+      },
+      "item_tpl_travel_cloak": {
+        "id": "item_tpl_travel_cloak",
+        "name": "Плащ путника",
+        "item_type": "armor",
+        "rarity": "green",
+        "description": "Защищает от ветра и дождя.",
+        "icon_key": null,
+        "equip_slots": [
+          "torso"
+        ],
+        "two_handed": false,
+        "stat_mods": {
+          "agi": 1
+        },
+        "granted_ability_ids": [],
+        "tags": [
+          "легкая броня"
+        ]
+      },
+      "item_tpl_healing_potion": {
+        "id": "item_tpl_healing_potion",
+        "name": "Зелье исцеления",
+        "item_type": "consumable",
+        "rarity": "white",
+        "description": "Восстанавливает немного здоровья.",
+        "icon_key": null,
+        "equip_slots": [],
+        "two_handed": false,
+        "stat_mods": {},
+        "granted_ability_ids": [],
+        "tags": [
+          "лечебное"
+        ]
+      }
+    },
+    "quest_templates": {
+      "quest_tpl_ruins": {
+        "id": "quest_tpl_ruins",
+        "name": "Пробуждение руин",
+        "description": "Исследуйте руины у деревни и найдите источник тревоги.",
+        "cannot_decline": false,
+        "objectives": [
+          {
+            "id": "obj_1",
+            "text": "Осмотреть вход в руины",
+            "done": false,
+            "progress": null
+          },
+          {
+            "id": "obj_2",
+            "text": "Вернуться к старосте с докладом",
+            "done": false,
+            "progress": null
+          }
+        ],
+        "rewards": {
+          "xp": 50,
+          "gold": 10
+        }
+      }
+    },
+    "message_templates": {
+      "msg_tpl_welcome": {
+        "id": "msg_tpl_welcome",
+        "name": "Приветствие",
+        "title": "Добро пожаловать",
+        "body": "Кампания готова. Вы можете начать с задания в руинах.",
+        "severity": "info",
+        "collapsible": true
+      },
+      "msg_tpl_warning": {
+        "id": "msg_tpl_warning",
+        "name": "Предупреждение",
+        "title": "Опасная зона",
+        "body": "В руинах замечены следы магии. Будьте осторожны!",
+        "severity": "warning",
+        "collapsible": false
+      }
+    },
+    "ability_categories": {
+      "equipment": {
+        "id": "equipment",
+        "name": "Экипировка",
+        "description": "",
+        "hidden": false
+      }
+    },
+    "abilities": {},
+    "active_quests": [],
+    "system_messages": [],
+    "chats": {},
+    "contacts": {},
+    "friend_requests": {},
+    "settings": {
+      "xp_curve": {
+        "base_xp": 200,
+        "growth_rate": 1.25
+      },
+      "stat_rule": {
+        "base_per_level": 5,
+        "bonus_every_5": 2,
+        "bonus_every_10": 1
+      },
+      "equipment_category_id": "equipment",
+      "sheet_sections": [
+        {
+          "key": "stats",
+          "title": "Статы",
+          "visible": true,
+          "order": 1
+        },
+        {
+          "key": "resources",
+          "title": "Ресурсы",
+          "visible": true,
+          "order": 2
+        },
+        {
+          "key": "currencies",
+          "title": "Валюты",
+          "visible": true,
+          "order": 3
+        },
+        {
+          "key": "reputations",
+          "title": "Репутации",
+          "visible": true,
+          "order": 4
+        }
+      ]
+    }
+  },
+  "events": [],
+  "last_seq": 0
+}
