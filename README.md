@@ -47,6 +47,11 @@ AETHER_LOAD_DEMO=1
 AETHER_DEMO_PATH=storage/seed_demo.json
 ```
 
+## Документация
+
+- [Host UI](docs/host.md)
+- [Player UI](docs/player.md)
+
 ## Команды Makefile
 
 ```bash
