@@ -35,6 +35,11 @@ python -m uvicorn server.main:app --host 0.0.0.0 --port 8000
 | --- | --- | --- |
 | `AETHER_CAMPAIGN_PATH` | путь к JSON-хранилищу кампании | `data/campaign.json` |
 
+## Документация
+
+- [Host UI](docs/host.md)
+- [Player UI](docs/player.md)
+
 ## Команды Makefile
 
 ```bash
