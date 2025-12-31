@@ -34,6 +34,18 @@ python -m uvicorn server.main:app --host 0.0.0.0 --port 8000
 | Переменная | Описание | Значение по умолчанию |
 | --- | --- | --- |
 | `AETHER_CAMPAIGN_PATH` | путь к JSON-хранилищу кампании | `data/campaign.json` |
+| `AETHER_LOAD_DEMO` | загрузить демо-набор при пустой кампании (`1`, `true`, `yes`) | не задано |
+| `AETHER_DEMO_PATH` | путь к JSON-демо-набору (используется при `AETHER_LOAD_DEMO`) | `storage/seed_demo.json` |
+
+## Демо-набор
+
+Чтобы загрузить демо-данные (предметы, квесты, сообщения) в пустую кампанию, установите переменные:
+
+```bash
+AETHER_LOAD_DEMO=1
+# необязательно, если используете стандартный путь
+AETHER_DEMO_PATH=storage/seed_demo.json
+```
 
 ## Команды Makefile
 
