@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from datetime import datetime
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -71,43 +72,103 @@ class JsonCampaignRepository:
 
     def list_events(self, after_seq: int = 0) -> List[EventLogEntry]:
         data = self._read_data()
-        events = [EventLogEntry.from_dict(e) for e in data.get("events", [])]
+        events: List[EventLogEntry] = []
+        for raw in data.get("events", []):
+            event = _safe_event_from_dict(raw)
+            if event:
+                events.append(event)
         return [event for event in events if event.seq > after_seq]
 
     def get_last_seq(self) -> int:
         data = self._read_data()
-        return int(data.get("last_seq", 0))
+        try:
+            return int(data.get("last_seq", 0))
+        except (TypeError, ValueError):
+            return 0
 
     def export_data(self) -> Dict[str, Any]:
         return self._read_data()
 
     def import_data(self, data: Dict[str, Any]) -> None:
-        if "snapshot" not in data:
+        if not isinstance(data, dict):
+            raise ValueError("Invalid import payload")
+        if "snapshot" not in data or not isinstance(data.get("snapshot"), dict):
             raise ValueError("Missing snapshot")
-        if "events" not in data:
-            data["events"] = []
-        if "last_seq" not in data:
-            data["last_seq"] = 0
-        if "schema_version" not in data:
-            data["schema_version"] = SCHEMA_VERSION
-        self._write_data(data)
+        normalized = self._ensure_schema(dict(data))
+        self._write_data(normalized)
 
     def _read_data(self) -> Dict[str, Any]:
         if not self.path.exists():
-            state = create_default_campaign_state()
-            data = {
-                "schema_version": SCHEMA_VERSION,
-                "snapshot": serialize_campaign_state(state),
-                "events": [],
-                "last_seq": 0,
-            }
+            data = self._build_default_store()
             self._write_data(data)
             return data
-        return json.loads(self.path.read_text(encoding="utf-8"))
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except JSONDecodeError:
+            return self._recover_corrupt_store("invalid json")
+        if not isinstance(raw, dict):
+            return self._recover_corrupt_store("root is not a dict")
+        data = self._ensure_schema(raw)
+        if "snapshot" not in data or not isinstance(data.get("snapshot"), dict):
+            return self._recover_corrupt_store("missing snapshot")
+        return data
 
     def _write_data(self, data: Dict[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _build_default_store(self) -> Dict[str, Any]:
+        state = create_default_campaign_state()
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "snapshot": serialize_campaign_state(state),
+            "events": [],
+            "last_seq": 0,
+        }
+
+    def _recover_corrupt_store(self, reason: str) -> Dict[str, Any]:
+        if self.path.exists():
+            timestamp = utcnow().strftime("%Y%m%d%H%M%S")
+            backup_path = self.path.with_suffix(self.path.suffix + f".corrupt-{timestamp}")
+            backup_path.write_text(self.path.read_text(encoding="utf-8"), encoding="utf-8")
+        data = self._build_default_store()
+        data["recovery_reason"] = reason
+        self._write_data(data)
+        return data
+
+    def _ensure_schema(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        schema_version = data.get("schema_version")
+        try:
+            schema_version_int = int(schema_version)
+        except (TypeError, ValueError):
+            schema_version_int = 0
+        if schema_version_int < SCHEMA_VERSION:
+            data = self._migrate_schema(data, schema_version_int)
+        if "events" not in data or not isinstance(data.get("events"), list):
+            data["events"] = []
+        if "last_seq" not in data:
+            data["last_seq"] = 0
+        try:
+            data["last_seq"] = int(data.get("last_seq", 0))
+        except (TypeError, ValueError):
+            data["last_seq"] = 0
+        data["schema_version"] = SCHEMA_VERSION
+        return data
+
+    def _migrate_schema(self, data: Dict[str, Any], from_version: int) -> Dict[str, Any]:
+        if from_version < 1:
+            if "snapshot" in data and isinstance(data.get("snapshot"), dict):
+                snapshot = data["snapshot"]
+                settings = snapshot.get("settings")
+                if not isinstance(settings, dict):
+                    settings = {}
+                if "sheet_sections" not in settings:
+                    settings["sheet_sections"] = [
+                        asdict(section) for section in default_sheet_sections()
+                    ]
+                snapshot["settings"] = settings
+                data["snapshot"] = snapshot
+        return data
 
 
 def create_default_campaign_state() -> CampaignState:
@@ -175,6 +236,8 @@ def serialize_campaign_state(state: CampaignState) -> Dict[str, Any]:
 
 
 def deserialize_campaign_state(data: Dict[str, Any]) -> CampaignState:
+    if not isinstance(data, dict):
+        data = {}
     return CampaignState(
         id=str(data.get("id", new_id("campaign"))),
         character=deserialize_character(data.get("character", {})),
@@ -236,6 +299,8 @@ def serialize_campaign_settings(settings: CampaignSettings) -> Dict[str, Any]:
 
 
 def deserialize_campaign_settings(data: Dict[str, Any]) -> CampaignSettings:
+    if not isinstance(data, dict):
+        data = {}
     xp_curve = data.get("xp_curve", {})
     stat_rule = data.get("stat_rule", {})
     raw_sections = data.get("sheet_sections")
@@ -275,6 +340,8 @@ def serialize_character(character: Character) -> Dict[str, Any]:
 
 
 def deserialize_character(data: Dict[str, Any]) -> Character:
+    if not isinstance(data, dict):
+        data = {}
     resources: Dict[str, tuple[int, int]] = {}
     raw_resources = data.get("resources", {})
     if not isinstance(raw_resources, dict):
@@ -330,6 +397,8 @@ def serialize_inventory(inventory: InventoryState) -> Dict[str, Any]:
 
 def deserialize_inventory(data: Dict[str, Any]) -> InventoryState:
     inventory = InventoryState()
+    if not isinstance(data, dict):
+        return inventory
     for inst_id, inst_data in data.items():
         inst = deserialize_item_instance(inst_data)
         inventory.items[inst_id] = inst
@@ -348,6 +417,8 @@ def serialize_item_instance(inst: ItemInstance) -> Dict[str, Any]:
 
 
 def deserialize_item_instance(data: Dict[str, Any]) -> ItemInstance:
+    if not isinstance(data, dict):
+        data = {}
     return ItemInstance(
         id=str(data.get("id", new_id("item"))),
         template_id=str(data.get("template_id", "")),
@@ -375,17 +446,27 @@ def serialize_item_template(template: ItemTemplate) -> Dict[str, Any]:
 
 
 def deserialize_item_template(data: Dict[str, Any]) -> ItemTemplate:
+    if not isinstance(data, dict):
+        data = {}
     equip_slots: List[EquipmentSlot] = []
     for slot in data.get("equip_slots", []):
         try:
             equip_slots.append(EquipmentSlot(slot))
         except ValueError:
             continue
+    try:
+        item_type = ItemType(data.get("item_type", ItemType.misc.value))
+    except ValueError:
+        item_type = ItemType.misc
+    try:
+        rarity = Rarity(data.get("rarity", Rarity.white.value))
+    except ValueError:
+        rarity = Rarity.white
     return ItemTemplate(
         id=str(data.get("id", new_id("tpl"))),
         name=str(data.get("name", "")),
-        item_type=ItemType(data.get("item_type", ItemType.misc.value)),
-        rarity=Rarity(data.get("rarity", Rarity.white.value)),
+        item_type=item_type,
+        rarity=rarity,
         description=str(data.get("description", "")),
         icon_key=data.get("icon_key"),
         equip_slots=equip_slots,
@@ -408,6 +489,8 @@ def serialize_class_def(class_def: ClassDefinition) -> Dict[str, Any]:
 
 
 def deserialize_class_def(data: Dict[str, Any]) -> ClassDefinition:
+    if not isinstance(data, dict):
+        data = {}
     allowed_item_types: List[ItemType] = []
     for item_type in data.get("allowed_item_types", []):
         try:
@@ -444,6 +527,8 @@ def serialize_quest_template(template: QuestTemplate) -> Dict[str, Any]:
 
 
 def deserialize_quest_template(data: Dict[str, Any]) -> QuestTemplate:
+    if not isinstance(data, dict):
+        data = {}
     return QuestTemplate(
         id=str(data.get("id", new_id("quest_tpl"))),
         name=str(data.get("name", "")),
@@ -464,6 +549,8 @@ def serialize_objective(obj: Objective) -> Dict[str, Any]:
 
 
 def deserialize_objective(data: Dict[str, Any]) -> Objective:
+    if not isinstance(data, dict):
+        data = {}
     progress = data.get("progress")
     return Objective(
         id=str(data.get("id", new_id("obj"))),
@@ -483,6 +570,8 @@ def serialize_ability_category(category: AbilityCategory) -> Dict[str, Any]:
 
 
 def deserialize_ability_category(data: Dict[str, Any]) -> AbilityCategory:
+    if not isinstance(data, dict):
+        data = {}
     return AbilityCategory(
         id=str(data.get("id", new_id("cat"))),
         name=str(data.get("name", "")),
@@ -506,6 +595,8 @@ def serialize_ability(ability: Ability) -> Dict[str, Any]:
 
 
 def deserialize_ability(data: Dict[str, Any]) -> Ability:
+    if not isinstance(data, dict):
+        data = {}
     return Ability(
         id=str(data.get("id", new_id("ability"))),
         name=str(data.get("name", "")),
@@ -528,6 +619,8 @@ def serialize_chat_contact(contact: ChatContact) -> Dict[str, Any]:
 
 
 def deserialize_chat_contact(data: Dict[str, Any]) -> ChatContact:
+    if not isinstance(data, dict):
+        data = {}
     return ChatContact(
         id=str(data.get("id", new_id("contact"))),
         display_name=str(data.get("display_name", "")),
@@ -546,6 +639,8 @@ def serialize_friend_request(request: FriendRequest) -> Dict[str, Any]:
 
 
 def deserialize_friend_request(data: Dict[str, Any]) -> FriendRequest:
+    if not isinstance(data, dict):
+        data = {}
     return FriendRequest(
         id=str(data.get("id", new_id("req"))),
         contact_id=str(data.get("contact_id", "")),
@@ -571,6 +666,11 @@ def serialize_chat_message(message: ChatMessage) -> Dict[str, Any]:
 
 
 def deserialize_chat_message(data: Dict[str, Any]) -> ChatMessage:
+    if not isinstance(data, dict):
+        data = {}
+    links = data.get("links", [])
+    if not isinstance(links, list):
+        links = []
     return ChatMessage(
         id=str(data.get("id", new_id("chatmsg"))),
         chat_id=str(data.get("chat_id", "")),
@@ -579,7 +679,7 @@ def deserialize_chat_message(data: Dict[str, Any]) -> ChatMessage:
         created_at=datetime_from_iso(data.get("created_at"))
         if data.get("created_at")
         else utcnow(),
-        links=[chat_link_from_dict(link) for link in data.get("links", [])],
+        links=[chat_link_from_dict(link) for link in links],
     )
 
 
@@ -593,11 +693,16 @@ def serialize_chat_thread(thread: ChatThread) -> Dict[str, Any]:
 
 
 def deserialize_chat_thread(data: Dict[str, Any]) -> ChatThread:
+    if not isinstance(data, dict):
+        data = {}
+    messages = data.get("messages", [])
+    if not isinstance(messages, list):
+        messages = []
     return ChatThread(
         id=str(data.get("id", new_id("chat"))),
         contact_id=str(data.get("contact_id", "")),
         opened=bool(data.get("opened", False)),
-        messages=[deserialize_chat_message(msg) for msg in data.get("messages", [])],
+        messages=[deserialize_chat_message(msg) for msg in messages],
     )
 
 
@@ -605,3 +710,12 @@ def datetime_from_iso(value: str) -> Any:
     if not value:
         return None
     return datetime.fromisoformat(value)
+
+
+def _safe_event_from_dict(data: Any) -> EventLogEntry | None:
+    if not isinstance(data, dict):
+        return None
+    try:
+        return EventLogEntry.from_dict(data)
+    except (KeyError, TypeError, ValueError):
+        return None
