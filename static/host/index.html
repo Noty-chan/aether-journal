@@ -29,16 +29,38 @@
       </section>
 
       <div class="tabs" role="tablist">
-        <button class="tab active" type="button" data-tab="sheet">Персонаж</button>
-        <button class="tab" type="button" data-tab="rules">Правила</button>
-        <button class="tab" type="button" data-tab="library">Библиотека</button>
-        <button class="tab" type="button" data-tab="quests">Квесты</button>
-        <button class="tab" type="button" data-tab="abilities">Способности</button>
-        <button class="tab" type="button" data-tab="messages">
-          Системные сообщения
+        <button class="tab active" type="button" data-tab="sheet">
+          <img class="tab__icon" data-icon="sheet" alt="" aria-hidden="true" />
+          <span class="tab__label">Персонаж</span>
         </button>
-        <button class="tab" type="button" data-tab="chat">Чат</button>
-        <button class="tab" type="button" data-tab="log">Лог</button>
+        <button class="tab" type="button" data-tab="rules">
+          <img class="tab__icon" data-icon="rules" alt="" aria-hidden="true" />
+          <span class="tab__label">Правила</span>
+        </button>
+        <button class="tab" type="button" data-tab="library">
+          <img class="tab__icon" data-icon="library" alt="" aria-hidden="true" />
+          <span class="tab__label">Библиотека</span>
+        </button>
+        <button class="tab" type="button" data-tab="quests">
+          <img class="tab__icon" data-icon="quests" alt="" aria-hidden="true" />
+          <span class="tab__label">Квесты</span>
+        </button>
+        <button class="tab" type="button" data-tab="abilities">
+          <img class="tab__icon" data-icon="abilities" alt="" aria-hidden="true" />
+          <span class="tab__label">Способности</span>
+        </button>
+        <button class="tab" type="button" data-tab="messages">
+          <img class="tab__icon" data-icon="messages" alt="" aria-hidden="true" />
+          <span class="tab__label">Системные сообщения</span>
+        </button>
+        <button class="tab" type="button" data-tab="chat">
+          <img class="tab__icon" data-icon="chat" alt="" aria-hidden="true" />
+          <span class="tab__label">Чат</span>
+        </button>
+        <button class="tab" type="button" data-tab="log">
+          <img class="tab__icon" data-icon="log" alt="" aria-hidden="true" />
+          <span class="tab__label">Лог</span>
+        </button>
       </div>
 
       <section class="tab-panel" data-tab-panel="sheet">
@@ -554,6 +576,20 @@
             </div>
           </div>
           <div class="hint">Настройки сохраняются в браузере текущего устройства.</div>
+        </section>
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Иконки интерфейса</h2>
+            <span class="meta">Пакет иконок для вкладок</span>
+          </div>
+          <div class="form-row">
+            <label for="icon-pack-select">Пакет</label>
+            <select id="icon-pack-select">
+              <option value="pack-default">По умолчанию</option>
+              <option value="pack-alt">Альтернативный</option>
+            </select>
+          </div>
+          <div class="hint">Настройка сохраняется в браузере текущего устройства.</div>
         </section>
       </section>
 
