@@ -47,6 +47,39 @@ AETHER_LOAD_DEMO=1
 AETHER_DEMO_PATH=storage/seed_demo.json
 ```
 
+## Экспорт и импорт
+
+Для экспорта и импорта отдельных частей используйте Host токен:
+
+```bash
+# Шаблоны (предметы/квесты/сообщения)
+curl -H "Authorization: Bearer <HOST_TOKEN>" \
+  http://127.0.0.1:8000/api/export/templates > templates.json
+
+curl -X POST -H "Authorization: Bearer <HOST_TOKEN>" \
+  -H "Content-Type: application/json" \
+  --data @templates.json \
+  http://127.0.0.1:8000/api/import/templates
+
+# Лог событий
+curl -H "Authorization: Bearer <HOST_TOKEN>" \
+  http://127.0.0.1:8000/api/export/log > event_log.json
+
+curl -X POST -H "Authorization: Bearer <HOST_TOKEN>" \
+  -H "Content-Type: application/json" \
+  --data @event_log.json \
+  http://127.0.0.1:8000/api/import/log
+
+# Чаты и контакты
+curl -H "Authorization: Bearer <HOST_TOKEN>" \
+  http://127.0.0.1:8000/api/export/chats > chats.json
+
+curl -X POST -H "Authorization: Bearer <HOST_TOKEN>" \
+  -H "Content-Type: application/json" \
+  --data @chats.json \
+  http://127.0.0.1:8000/api/import/chats
+```
+
 ## Документация
 
 - [Host UI](docs/host.md)

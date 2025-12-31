@@ -97,6 +97,81 @@ class JsonCampaignRepository:
         normalized = self._ensure_schema(dict(data))
         self._write_data(normalized)
 
+    def export_templates(self) -> Dict[str, Any]:
+        data = self._read_data()
+        snapshot = data.get("snapshot", {})
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+        return {
+            "schema_version": data.get("schema_version", SCHEMA_VERSION),
+            "item_templates": _ensure_dict(snapshot.get("item_templates")),
+            "quest_templates": _ensure_dict(snapshot.get("quest_templates")),
+            "message_templates": _ensure_dict(snapshot.get("message_templates")),
+        }
+
+    def import_templates(self, data: Dict[str, Any]) -> None:
+        if not isinstance(data, dict):
+            raise ValueError("Invalid templates payload")
+        store = self._read_data()
+        snapshot = store.get("snapshot", {})
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+        snapshot["item_templates"] = _ensure_dict(data.get("item_templates"))
+        snapshot["quest_templates"] = _ensure_dict(data.get("quest_templates"))
+        snapshot["message_templates"] = _ensure_dict(data.get("message_templates"))
+        store["snapshot"] = snapshot
+        self._write_data(store)
+
+    def export_log(self) -> Dict[str, Any]:
+        data = self._read_data()
+        return {
+            "schema_version": data.get("schema_version", SCHEMA_VERSION),
+            "events": _ensure_list(data.get("events")),
+            "last_seq": data.get("last_seq", 0),
+        }
+
+    def import_log(self, data: Dict[str, Any]) -> None:
+        if not isinstance(data, dict):
+            raise ValueError("Invalid log payload")
+        store = self._read_data()
+        events = [event for event in _ensure_list(data.get("events")) if isinstance(event, dict)]
+        last_seq = data.get("last_seq")
+        try:
+            last_seq_value = int(last_seq)
+        except (TypeError, ValueError):
+            last_seq_value = max(
+                (int(event.get("seq", 0)) for event in events if event.get("seq") is not None),
+                default=0,
+            )
+        store["events"] = events
+        store["last_seq"] = last_seq_value
+        self._write_data(store)
+
+    def export_chats(self) -> Dict[str, Any]:
+        data = self._read_data()
+        snapshot = data.get("snapshot", {})
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+        return {
+            "schema_version": data.get("schema_version", SCHEMA_VERSION),
+            "contacts": _ensure_dict(snapshot.get("contacts")),
+            "chats": _ensure_dict(snapshot.get("chats")),
+            "friend_requests": _ensure_dict(snapshot.get("friend_requests")),
+        }
+
+    def import_chats(self, data: Dict[str, Any]) -> None:
+        if not isinstance(data, dict):
+            raise ValueError("Invalid chats payload")
+        store = self._read_data()
+        snapshot = store.get("snapshot", {})
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+        snapshot["contacts"] = _ensure_dict(data.get("contacts"))
+        snapshot["chats"] = _ensure_dict(data.get("chats"))
+        snapshot["friend_requests"] = _ensure_dict(data.get("friend_requests"))
+        store["snapshot"] = snapshot
+        self._write_data(store)
+
     def _read_data(self) -> Dict[str, Any]:
         if not self.path.exists():
             data = self._build_default_store()
@@ -719,3 +794,15 @@ def _safe_event_from_dict(data: Any) -> EventLogEntry | None:
         return EventLogEntry.from_dict(data)
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _ensure_dict(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+def _ensure_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return list(value)
+    return []

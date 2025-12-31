@@ -44,6 +44,16 @@ const sheetSettingsContainer = document.getElementById("sheet-settings");
 const sheetSettingsSaveBtn = document.getElementById("sheet-settings-save");
 const sheetSettingsResetBtn = document.getElementById("sheet-settings-reset");
 const sheetSettingsStatusEl = document.getElementById("sheet-settings-status");
+const exportTemplatesBtn = document.getElementById("export-templates-btn");
+const importTemplatesInput = document.getElementById("import-templates-file");
+const importTemplatesBtn = document.getElementById("import-templates-btn");
+const exportLogBtn = document.getElementById("export-log-btn");
+const importLogInput = document.getElementById("import-log-file");
+const importLogBtn = document.getElementById("import-log-btn");
+const exportChatsBtn = document.getElementById("export-chats-btn");
+const importChatsInput = document.getElementById("import-chats-file");
+const importChatsBtn = document.getElementById("import-chats-btn");
+const exportImportStatusEl = document.getElementById("export-import-status");
 const itemTemplateNameInput = document.getElementById("item-template-name");
 const itemTemplateTypeSelect = document.getElementById("item-template-type");
 const itemTemplateRaritySelect = document.getElementById("item-template-rarity");
@@ -259,6 +269,17 @@ function setSheetSettingsStatus(message, variant = "") {
   sheetSettingsStatusEl.classList.remove("status--ok", "status--error");
   if (variant) {
     sheetSettingsStatusEl.classList.add(`status--${variant}`);
+  }
+}
+
+function setExportImportStatus(message, variant = "") {
+  if (!exportImportStatusEl) {
+    return;
+  }
+  exportImportStatusEl.textContent = message;
+  exportImportStatusEl.classList.remove("status--ok", "status--error");
+  if (variant) {
+    exportImportStatusEl.classList.add(`status--${variant}`);
   }
 }
 
@@ -1467,6 +1488,77 @@ async function fetchLinkables() {
     console.error(error);
   }
   renderChatLinkables();
+}
+
+async function downloadExport(endpoint, filename) {
+  const token = getToken();
+  if (!token) {
+    setExportImportStatus("Укажите токен", "error");
+    return;
+  }
+  setExportImportStatus("Экспорт...");
+  try {
+    const response = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new Error("Не удалось экспортировать");
+    }
+    const payload = await response.json();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setExportImportStatus("Экспорт готов", "ok");
+  } catch (error) {
+    setExportImportStatus(error.message, "error");
+  }
+}
+
+async function importPayloadFromFile(inputEl, endpoint) {
+  const token = getToken();
+  if (!token) {
+    setExportImportStatus("Укажите токен", "error");
+    return;
+  }
+  const file = inputEl?.files?.[0];
+  if (!file) {
+    setExportImportStatus("Выберите JSON-файл", "error");
+    return;
+  }
+  setExportImportStatus("Импорт...");
+  try {
+    const text = await file.text();
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch (error) {
+      throw new Error("Файл не содержит корректный JSON");
+    }
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось импортировать");
+    }
+    setExportImportStatus("Импорт выполнен", "ok");
+    if (inputEl) {
+      inputEl.value = "";
+    }
+    await fetchSnapshot();
+  } catch (error) {
+    setExportImportStatus(error.message, "error");
+  }
 }
 
 function findTemplateForItem(itemId) {
@@ -3649,6 +3741,42 @@ if (sheetSettingsResetBtn) {
     }
     await submitSheetSettings(DEFAULT_SHEET_SECTIONS.map((section) => ({ ...section })));
   });
+}
+
+if (exportTemplatesBtn) {
+  exportTemplatesBtn.addEventListener("click", () =>
+    downloadExport("/api/export/templates", "aether-templates.json"),
+  );
+}
+
+if (importTemplatesBtn) {
+  importTemplatesBtn.addEventListener("click", () =>
+    importPayloadFromFile(importTemplatesInput, "/api/import/templates"),
+  );
+}
+
+if (exportLogBtn) {
+  exportLogBtn.addEventListener("click", () =>
+    downloadExport("/api/export/log", "aether-log.json"),
+  );
+}
+
+if (importLogBtn) {
+  importLogBtn.addEventListener("click", () =>
+    importPayloadFromFile(importLogInput, "/api/import/log"),
+  );
+}
+
+if (exportChatsBtn) {
+  exportChatsBtn.addEventListener("click", () =>
+    downloadExport("/api/export/chats", "aether-chats.json"),
+  );
+}
+
+if (importChatsBtn) {
+  importChatsBtn.addEventListener("click", () =>
+    importPayloadFromFile(importChatsInput, "/api/import/chats"),
+  );
 }
 
 if (sheetSettingsContainer) {

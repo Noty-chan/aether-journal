@@ -185,6 +185,26 @@ class ImportRequest(BaseModel):
     schema_version: Optional[int] = None
 
 
+class TemplatesImportRequest(BaseModel):
+    item_templates: Dict[str, Any] = Field(default_factory=dict)
+    quest_templates: Dict[str, Any] = Field(default_factory=dict)
+    message_templates: Dict[str, Any] = Field(default_factory=dict)
+    schema_version: Optional[int] = None
+
+
+class LogImportRequest(BaseModel):
+    events: List[Dict[str, Any]] = Field(default_factory=list)
+    last_seq: Optional[int] = None
+    schema_version: Optional[int] = None
+
+
+class ChatsImportRequest(BaseModel):
+    contacts: Dict[str, Any] = Field(default_factory=dict)
+    chats: Dict[str, Any] = Field(default_factory=dict)
+    friend_requests: Dict[str, Any] = Field(default_factory=dict)
+    schema_version: Optional[int] = None
+
+
 @dataclass
 class ApiContext:
     service: CampaignService
@@ -759,7 +779,48 @@ def export_campaign(context: ApiContext = Depends(get_api_context)) -> Dict[str,
 def import_campaign(
     payload: ImportRequest, context: ApiContext = Depends(get_api_context)
 ) -> Dict[str, Any]:
-    context.repo.import_data(payload.dict())
+    _apply_import(lambda: context.repo.import_data(payload.dict()))
+    context.service.state = context.repo.load()
+    return {"status": "ok"}
+
+
+@router.get("/export/templates", dependencies=[Depends(require_token_role(HOST_ROLE))])
+def export_templates(context: ApiContext = Depends(get_api_context)) -> Dict[str, Any]:
+    return context.repo.export_templates()
+
+
+@router.post("/import/templates", dependencies=[Depends(require_token_role(HOST_ROLE))])
+def import_templates(
+    payload: TemplatesImportRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    _apply_import(lambda: context.repo.import_templates(payload.dict()))
+    context.service.state = context.repo.load()
+    return {"status": "ok"}
+
+
+@router.get("/export/log", dependencies=[Depends(require_token_role(HOST_ROLE))])
+def export_log(context: ApiContext = Depends(get_api_context)) -> Dict[str, Any]:
+    return context.repo.export_log()
+
+
+@router.post("/import/log", dependencies=[Depends(require_token_role(HOST_ROLE))])
+def import_log(
+    payload: LogImportRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    _apply_import(lambda: context.repo.import_log(payload.dict()))
+    return {"status": "ok"}
+
+
+@router.get("/export/chats", dependencies=[Depends(require_token_role(HOST_ROLE))])
+def export_chats(context: ApiContext = Depends(get_api_context)) -> Dict[str, Any]:
+    return context.repo.export_chats()
+
+
+@router.post("/import/chats", dependencies=[Depends(require_token_role(HOST_ROLE))])
+def import_chats(
+    payload: ChatsImportRequest, context: ApiContext = Depends(get_api_context)
+) -> Dict[str, Any]:
+    _apply_import(lambda: context.repo.import_chats(payload.dict()))
     context.service.state = context.repo.load()
     return {"status": "ok"}
 
@@ -779,3 +840,10 @@ async def _apply_service(context: ApiContext, call) -> Dict[str, Any]:
     except DomainError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return await _persist_and_broadcast(context, events)
+
+
+def _apply_import(call) -> None:
+    try:
+        call()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
