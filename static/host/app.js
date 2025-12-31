@@ -55,6 +55,7 @@ const itemTemplateTwoHandedInput = document.getElementById("item-template-two-ha
 const itemTemplateSearchInput = document.getElementById("item-template-search");
 const itemTemplateFilterTypeSelect = document.getElementById("item-template-filter-type");
 const itemTemplateFilterRaritySelect = document.getElementById("item-template-filter-rarity");
+const itemTemplateFilterClassSelect = document.getElementById("item-template-filter-class");
 const itemTemplateFilterTwoHandedInput = document.getElementById(
   "item-template-filter-two-handed",
 );
@@ -73,6 +74,7 @@ const messageTemplateSaveBtn = document.getElementById("message-template-save");
 const messageTemplateStatusEl = document.getElementById("message-template-status");
 const messageTemplatesList = document.getElementById("message-templates-list");
 const messageTemplatesCountEl = document.getElementById("message-templates-count");
+const messageTemplateSearchInput = document.getElementById("message-template-search");
 const questTemplateSearchInput = document.getElementById("quest-template-search");
 const questTemplatesCountEl = document.getElementById("quest-templates-count");
 const chatSummaryEl = document.getElementById("chat-summary");
@@ -101,6 +103,12 @@ const soundInfoValue = document.getElementById("sound-info-value");
 const soundWarningValue = document.getElementById("sound-warning-value");
 const soundAlertValue = document.getElementById("sound-alert-value");
 const soundLevelUpValue = document.getElementById("sound-level-up-value");
+
+const {
+  itemTemplateMatches = () => true,
+  questTemplateMatches = () => true,
+  messageTemplateMatches = () => true,
+} = window.AetherFilters || {};
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -157,8 +165,16 @@ const state = {
     type: "",
     rarity: "",
     twoHanded: false,
+    classId: "",
   },
-  questTemplateQuery: "",
+  questTemplateFilters: {
+    query: "",
+    onlyMandatory: false,
+  },
+  messageTemplateFilters: {
+    query: "",
+    severity: "",
+  },
   activeQuests: [],
   abilityCategories: {},
   abilities: {},
@@ -173,6 +189,7 @@ const state = {
   eventLog: [],
   eventSeqs: new Set(),
   classOptionsKey: "",
+  itemTemplateClassOptionsKey: "",
   sheetSectionsKey: "",
   sheetSectionNodes: {},
   sheetSettingsKey: "",
@@ -182,6 +199,7 @@ const state = {
   linkables: { npcs: [], quests: [], items: [] },
   selectedChatId: null,
   pendingChatLinks: [],
+  dragPayload: null,
 };
 
 function setStatus(message, variant = "") {
@@ -529,44 +547,165 @@ function getSlotLabel(slot) {
   return found ? found.label : slot || "—";
 }
 
-function normalizeSearch(value) {
-  return (value || "").toString().trim().toLowerCase();
+function debounce(callback, delay = 200) {
+  let timeoutId;
+  return (...args) => {
+    window.clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(() => {
+      callback(...args);
+    }, delay);
+  };
 }
 
-function itemTemplateMatches(template, filters) {
-  if (!template) {
-    return false;
-  }
-  if (filters.type && template.item_type !== filters.type) {
-    return false;
-  }
-  if (filters.rarity && template.rarity !== filters.rarity) {
-    return false;
-  }
-  if (filters.twoHanded && !template.two_handed) {
-    return false;
-  }
-  const query = normalizeSearch(filters.query);
-  if (!query) {
-    return true;
-  }
-  const tags = Array.isArray(template.tags) ? template.tags.join(" ") : template.tags || "";
-  const haystack = normalizeSearch(
-    [template.name, template.description, template.item_type, template.rarity, tags].join(" "),
-  );
-  return haystack.includes(query);
+function resolveCurrentClassId() {
+  return state.character?.class_id || "";
 }
 
-function questTemplateMatches(template, query) {
-  if (!template) {
-    return false;
+function syncFilterChipStates() {
+  document.querySelectorAll("[data-filter-target]").forEach((chip) => {
+    const target = chip.dataset.filterTarget;
+    const field = chip.dataset.filterField;
+    const value = chip.dataset.filterValue ?? "";
+    let active = false;
+    if (target === "item") {
+      if (field === "type") {
+        active = (state.itemTemplateFilters.type || "") === value;
+      } else if (field === "rarity") {
+        active = (state.itemTemplateFilters.rarity || "") === value;
+      } else if (field === "twoHanded") {
+        active = state.itemTemplateFilters.twoHanded === (value === "true");
+      } else if (field === "classId") {
+        const classId = value === "current" ? resolveCurrentClassId() : value;
+        active = (state.itemTemplateFilters.classId || "") === (classId || "");
+      }
+    }
+    if (target === "quest" && field === "onlyMandatory") {
+      const current = state.questTemplateFilters.onlyMandatory ? "true" : "";
+      active = current === value;
+    }
+    if (target === "message" && field === "severity") {
+      active = (state.messageTemplateFilters.severity || "") === value;
+    }
+    chip.classList.toggle("chip--active", active);
+  });
+}
+
+function handleFilterChipClick(chip) {
+  const target = chip.dataset.filterTarget;
+  const field = chip.dataset.filterField;
+  const value = chip.dataset.filterValue ?? "";
+  if (target === "item") {
+    if (field === "type") {
+      state.itemTemplateFilters.type =
+        state.itemTemplateFilters.type === value ? "" : value;
+      if (itemTemplateFilterTypeSelect) {
+        itemTemplateFilterTypeSelect.value = state.itemTemplateFilters.type;
+      }
+    }
+    if (field === "rarity") {
+      state.itemTemplateFilters.rarity =
+        state.itemTemplateFilters.rarity === value ? "" : value;
+      if (itemTemplateFilterRaritySelect) {
+        itemTemplateFilterRaritySelect.value = state.itemTemplateFilters.rarity;
+      }
+    }
+    if (field === "twoHanded") {
+      state.itemTemplateFilters.twoHanded = !state.itemTemplateFilters.twoHanded;
+      if (itemTemplateFilterTwoHandedInput) {
+        itemTemplateFilterTwoHandedInput.checked = state.itemTemplateFilters.twoHanded;
+      }
+    }
+    if (field === "classId") {
+      const resolvedValue = value === "current" ? resolveCurrentClassId() : value;
+      state.itemTemplateFilters.classId =
+        state.itemTemplateFilters.classId === resolvedValue ? "" : resolvedValue;
+      if (itemTemplateFilterClassSelect) {
+        itemTemplateFilterClassSelect.value = state.itemTemplateFilters.classId;
+      }
+    }
+    renderItemTemplates();
   }
-  const normalized = normalizeSearch(query);
-  if (!normalized) {
-    return true;
+  if (target === "quest" && field === "onlyMandatory") {
+    state.questTemplateFilters.onlyMandatory = value === "true";
+    renderQuestTemplates();
   }
-  const haystack = normalizeSearch([template.name, template.description].join(" "));
-  return haystack.includes(normalized);
+  if (target === "message" && field === "severity") {
+    state.messageTemplateFilters.severity = value;
+    renderMessageTemplates();
+  }
+  syncFilterChipStates();
+}
+
+const DRAG_TYPES = {
+  itemTemplate: "item-template",
+  questTemplate: "quest-template",
+  messageTemplate: "message-template",
+};
+
+function registerDragSource(element, payload) {
+  if (!element) {
+    return;
+  }
+  element.setAttribute("draggable", "true");
+  element.classList.add("drag-source");
+  element.addEventListener("dragstart", (event) => {
+    state.dragPayload = payload;
+    element.classList.add("is-dragging");
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData("text/plain", JSON.stringify(payload));
+    }
+  });
+  element.addEventListener("dragend", () => {
+    state.dragPayload = null;
+    element.classList.remove("is-dragging");
+    clearDropZoneHighlights();
+  });
+}
+
+function clearDropZoneHighlights() {
+  document
+    .querySelectorAll(".drop-zone--active")
+    .forEach((zone) => zone.classList.remove("drop-zone--active"));
+}
+
+function registerDropZone(element, { accepts = [], onDrop } = {}) {
+  if (!element) {
+    return;
+  }
+  element.classList.add("drop-zone");
+  const canAccept = () =>
+    state.dragPayload && accepts.includes(state.dragPayload.type);
+  element.addEventListener("dragenter", (event) => {
+    if (!canAccept()) {
+      return;
+    }
+    event.preventDefault();
+    element.classList.add("drop-zone--active");
+  });
+  element.addEventListener("dragover", (event) => {
+    if (!canAccept()) {
+      return;
+    }
+    event.preventDefault();
+  });
+  element.addEventListener("dragleave", (event) => {
+    if (event.relatedTarget && element.contains(event.relatedTarget)) {
+      return;
+    }
+    element.classList.remove("drop-zone--active");
+  });
+  element.addEventListener("drop", (event) => {
+    if (!canAccept()) {
+      return;
+    }
+    event.preventDefault();
+    element.classList.remove("drop-zone--active");
+    const payload = state.dragPayload;
+    if (payload && onDrop) {
+      onDrop(payload);
+    }
+  });
 }
 
 function describeEvent(event) {
@@ -1779,12 +1918,13 @@ function renderQuestTemplates() {
   questTemplatesList.innerHTML = "";
   const templates = Object.values(state.questTemplates || {});
   const filtered = templates.filter((template) =>
-    questTemplateMatches(template, state.questTemplateQuery),
+    questTemplateMatches(template, state.questTemplateFilters),
   );
   if (questTemplatesCountEl) {
-    questTemplatesCountEl.textContent = state.questTemplateQuery
-      ? `${filtered.length} / ${templates.length}`
-      : `${templates.length}`;
+    questTemplatesCountEl.textContent =
+      state.questTemplateFilters.query || state.questTemplateFilters.onlyMandatory
+        ? `${filtered.length} / ${templates.length}`
+        : `${templates.length}`;
   }
   if (templates.length === 0) {
     const empty = document.createElement("div");
@@ -1810,6 +1950,7 @@ function renderQuestTemplates() {
     .forEach((template) => {
       const row = document.createElement("div");
       row.className = "list__item";
+      registerDragSource(row, { type: DRAG_TYPES.questTemplate, id: template.id });
       const info = document.createElement("div");
       info.innerHTML = `<strong>${template.name}</strong><div class="meta">${template.description || "Описание отсутствует."}</div>`;
       const button = document.createElement("button");
@@ -2493,7 +2634,7 @@ function renderItemTemplates() {
   }
   const templates = Object.values(state.templates || {});
   const filtered = templates.filter((template) =>
-    itemTemplateMatches(template, state.itemTemplateFilters),
+    itemTemplateMatches(template, state.itemTemplateFilters, state.classes),
   );
   itemTemplatesList.innerHTML = "";
   if (itemTemplatesCountEl) {
@@ -2501,7 +2642,8 @@ function renderItemTemplates() {
       state.itemTemplateFilters.query ||
       state.itemTemplateFilters.type ||
       state.itemTemplateFilters.rarity ||
-      state.itemTemplateFilters.twoHanded
+      state.itemTemplateFilters.twoHanded ||
+      state.itemTemplateFilters.classId
         ? `${filtered.length} / ${templates.length}`
         : `${templates.length}`;
   }
@@ -2524,6 +2666,7 @@ function renderItemTemplates() {
     .forEach((template) => {
       const row = document.createElement("div");
       row.className = "list-row";
+      registerDragSource(row, { type: DRAG_TYPES.itemTemplate, id: template.id });
       const info = document.createElement("div");
       info.className = "list-row__info";
       const title = document.createElement("div");
@@ -2551,9 +2694,15 @@ function renderMessageTemplates() {
     return;
   }
   const templates = Object.values(state.messageTemplates || {});
+  const filtered = templates.filter((template) =>
+    messageTemplateMatches(template, state.messageTemplateFilters),
+  );
   messageTemplatesList.innerHTML = "";
   if (messageTemplatesCountEl) {
-    messageTemplatesCountEl.textContent = `${templates.length}`;
+    messageTemplatesCountEl.textContent =
+      state.messageTemplateFilters.query || state.messageTemplateFilters.severity
+        ? `${filtered.length} / ${templates.length}`
+        : `${templates.length}`;
   }
   if (!templates.length) {
     const empty = document.createElement("div");
@@ -2562,11 +2711,19 @@ function renderMessageTemplates() {
     messageTemplatesList.appendChild(empty);
     return;
   }
-  templates
+  if (!filtered.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Шаблоны не найдены.";
+    messageTemplatesList.appendChild(empty);
+    return;
+  }
+  filtered
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
     .forEach((template) => {
       const row = document.createElement("div");
       row.className = "list-row";
+      registerDragSource(row, { type: DRAG_TYPES.messageTemplate, id: template.id });
       const info = document.createElement("div");
       info.className = "list-row__info";
       const title = document.createElement("div");
@@ -2636,6 +2793,32 @@ function renderSettings() {
   renderSheetSettings();
 }
 
+function renderItemTemplateClassOptions() {
+  if (!itemTemplateFilterClassSelect) {
+    return;
+  }
+  const classIds = Object.keys(state.classes || {});
+  const key = classIds.join("|");
+  if (state.itemTemplateClassOptionsKey === key) {
+    return;
+  }
+  itemTemplateFilterClassSelect.innerHTML = "";
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "Все классы";
+  itemTemplateFilterClassSelect.appendChild(defaultOption);
+  classIds.forEach((classId) => {
+    const option = document.createElement("option");
+    option.value = classId;
+    option.textContent = state.classes[classId]?.name || classId;
+    itemTemplateFilterClassSelect.appendChild(option);
+  });
+  const currentValue = state.itemTemplateFilters.classId || "";
+  itemTemplateFilterClassSelect.value = classIds.includes(currentValue) ? currentValue : "";
+  state.itemTemplateFilters.classId = itemTemplateFilterClassSelect.value;
+  state.itemTemplateClassOptionsKey = key;
+}
+
 function render() {
   if (!state.character) {
     return;
@@ -2651,8 +2834,10 @@ function render() {
   renderChat();
   renderLog();
   renderSettings();
+  renderItemTemplateClassOptions();
   renderItemTemplates();
   renderMessageTemplates();
+  syncFilterChipStates();
   if (questCountEl) {
     questCountEl.textContent = `${state.activeQuests?.length || 0}`;
   }
@@ -2668,18 +2853,46 @@ function updateItemTemplateFilters() {
   if (itemTemplateFilterRaritySelect) {
     state.itemTemplateFilters.rarity = itemTemplateFilterRaritySelect.value;
   }
+  if (itemTemplateFilterClassSelect) {
+    state.itemTemplateFilters.classId = itemTemplateFilterClassSelect.value;
+  }
   if (itemTemplateFilterTwoHandedInput) {
     state.itemTemplateFilters.twoHanded = itemTemplateFilterTwoHandedInput.checked;
   }
   renderItemTemplates();
+  syncFilterChipStates();
 }
 
 function updateQuestTemplateFilter() {
   if (!questTemplateSearchInput) {
     return;
   }
-  state.questTemplateQuery = questTemplateSearchInput.value;
+  state.questTemplateFilters.query = questTemplateSearchInput.value;
   renderQuestTemplates();
+  syncFilterChipStates();
+}
+
+function updateMessageTemplateFilters() {
+  if (messageTemplateSearchInput) {
+    state.messageTemplateFilters.query = messageTemplateSearchInput.value;
+  }
+  renderMessageTemplates();
+  syncFilterChipStates();
+}
+
+function setupDropZones() {
+  registerDropZone(inventoryList, {
+    accepts: [DRAG_TYPES.itemTemplate],
+    onDrop: (payload) => addItemFromTemplate(payload.id),
+  });
+  registerDropZone(questStatusGroups, {
+    accepts: [DRAG_TYPES.questTemplate],
+    onDrop: (payload) => assignQuest(payload.id),
+  });
+  registerDropZone(messagesList, {
+    accepts: [DRAG_TYPES.messageTemplate],
+    onDrop: (payload) => sendMessageTemplate(payload.id),
+  });
 }
 
 async function assignQuest(templateId, button) {
@@ -3383,6 +3596,10 @@ async function sendChatMessage() {
   }
 }
 
+const debouncedUpdateItemTemplateFilters = debounce(updateItemTemplateFilters, 250);
+const debouncedUpdateQuestTemplateFilter = debounce(updateQuestTemplateFilter, 250);
+const debouncedUpdateMessageTemplateFilters = debounce(updateMessageTemplateFilters, 250);
+
 connectBtn.addEventListener("click", fetchSnapshot);
 refreshBtn.addEventListener("click", fetchSnapshot);
 
@@ -3463,7 +3680,7 @@ if (itemTemplateSaveBtn) {
 }
 
 if (itemTemplateSearchInput) {
-  itemTemplateSearchInput.addEventListener("input", updateItemTemplateFilters);
+  itemTemplateSearchInput.addEventListener("input", debouncedUpdateItemTemplateFilters);
 }
 
 if (itemTemplateFilterTypeSelect) {
@@ -3472,6 +3689,10 @@ if (itemTemplateFilterTypeSelect) {
 
 if (itemTemplateFilterRaritySelect) {
   itemTemplateFilterRaritySelect.addEventListener("change", updateItemTemplateFilters);
+}
+
+if (itemTemplateFilterClassSelect) {
+  itemTemplateFilterClassSelect.addEventListener("change", updateItemTemplateFilters);
 }
 
 if (itemTemplateFilterTwoHandedInput) {
@@ -3483,7 +3704,11 @@ if (messageTemplateSaveBtn) {
 }
 
 if (questTemplateSearchInput) {
-  questTemplateSearchInput.addEventListener("input", updateQuestTemplateFilter);
+  questTemplateSearchInput.addEventListener("input", debouncedUpdateQuestTemplateFilter);
+}
+
+if (messageTemplateSearchInput) {
+  messageTemplateSearchInput.addEventListener("input", debouncedUpdateMessageTemplateFilters);
 }
 
 if (chatContactAddBtn) {
@@ -3501,6 +3726,15 @@ if (chatLinkAddBtn) {
 if (chatMessageSendBtn) {
   chatMessageSendBtn.addEventListener("click", sendChatMessage);
 }
+
+document.addEventListener("click", (event) => {
+  const chip = event.target.closest(".chip[data-filter-target]");
+  if (chip) {
+    handleFilterChipClick(chip);
+  }
+});
+
+setupDropZones();
 
 state.audioSettings = loadAudioSettings();
 syncAudioControls();

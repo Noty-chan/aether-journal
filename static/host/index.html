@@ -225,10 +225,82 @@
                 <option value="gold">Легендарный</option>
               </select>
             </div>
+            <div class="form-row">
+              <label for="item-template-filter-class">Класс</label>
+              <select id="item-template-filter-class">
+                <option value="">Все классы</option>
+              </select>
+            </div>
             <div class="form-row inline">
               <label for="item-template-filter-two-handed">Только двуручные</label>
               <input id="item-template-filter-two-handed" type="checkbox" />
             </div>
+          </div>
+          <div class="chip-row" id="item-template-chips">
+            <span class="chip-row__label">Быстрый фильтр:</span>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="item"
+              data-filter-field="type"
+              data-filter-value=""
+            >
+              Все
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="item"
+              data-filter-field="type"
+              data-filter-value="weapon"
+            >
+              Оружие
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="item"
+              data-filter-field="type"
+              data-filter-value="armor"
+            >
+              Броня
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="item"
+              data-filter-field="rarity"
+              data-filter-value="purple"
+            >
+              Эпические
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="item"
+              data-filter-field="rarity"
+              data-filter-value="gold"
+            >
+              Легендарные
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="item"
+              data-filter-field="twoHanded"
+              data-filter-value="true"
+            >
+              Двуручное
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="item"
+              data-filter-field="classId"
+              data-filter-value="current"
+            >
+              Класс персонажа
+            </button>
           </div>
           <div class="form-row">
             <label for="item-template-name">Название</label>
@@ -329,6 +401,53 @@
             <h2>Отправка шаблонов</h2>
             <span class="meta">Быстрые системные сообщения</span>
           </div>
+          <div class="form-row">
+            <label for="message-template-search">Поиск</label>
+            <input
+              id="message-template-search"
+              type="text"
+              placeholder="Название, заголовок, текст"
+            />
+          </div>
+          <div class="chip-row" id="message-template-chips">
+            <span class="chip-row__label">Быстрый фильтр:</span>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="message"
+              data-filter-field="severity"
+              data-filter-value=""
+            >
+              Все
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="message"
+              data-filter-field="severity"
+              data-filter-value="info"
+            >
+              Инфо
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="message"
+              data-filter-field="severity"
+              data-filter-value="warning"
+            >
+              Внимание
+            </button>
+            <button
+              type="button"
+              class="chip"
+              data-filter-target="message"
+              data-filter-field="severity"
+              data-filter-value="alert"
+            >
+              Тревога
+            </button>
+          </div>
           <div class="list" id="message-templates-list"></div>
         </section>
       </section>
@@ -352,6 +471,27 @@
                   type="text"
                   placeholder="Название или описание"
                 />
+              </div>
+              <div class="chip-row" id="quest-template-chips">
+                <span class="chip-row__label">Быстрый фильтр:</span>
+                <button
+                  type="button"
+                  class="chip"
+                  data-filter-target="quest"
+                  data-filter-field="onlyMandatory"
+                  data-filter-value=""
+                >
+                  Все
+                </button>
+                <button
+                  type="button"
+                  class="chip"
+                  data-filter-target="quest"
+                  data-filter-field="onlyMandatory"
+                  data-filter-value="true"
+                >
+                  Обязательные
+                </button>
               </div>
               <div class="list" id="quest-templates"></div>
             </div>
@@ -501,6 +641,7 @@
       </section>
     </main>
 
+    <script src="filters.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
