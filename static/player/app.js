@@ -48,6 +48,7 @@ const soundInfoValue = document.getElementById("sound-info-value");
 const soundWarningValue = document.getElementById("sound-warning-value");
 const soundAlertValue = document.getElementById("sound-alert-value");
 const soundLevelUpValue = document.getElementById("sound-level-up-value");
+const iconPackSelect = document.getElementById("icon-pack-select");
 
 const EQUIPMENT_SLOTS = [
   { key: "weapon_1", label: "Оружие 1" },
@@ -89,6 +90,12 @@ const DEFAULT_AUDIO_SETTINGS = {
 };
 
 const AUDIO_SETTINGS_KEY = "playerAudioSettings";
+const ICON_PACK_KEY = "playerIconPack";
+const DEFAULT_ICON_PACK = "pack-default";
+const ICON_PACKS = {
+  "pack-default": "По умолчанию",
+  "pack-alt": "Альтернативный",
+};
 
 const state = {
   contacts: {},
@@ -113,6 +120,7 @@ const state = {
   playedMessageIds: new Set(),
   audioContext: null,
   audioSettings: { ...DEFAULT_AUDIO_SETTINGS },
+  iconPack: DEFAULT_ICON_PACK,
   eventLog: [],
   eventSeqs: new Set(),
   sheetSectionsKey: "",
@@ -167,6 +175,46 @@ function setupTabs() {
     tab.addEventListener("click", () => activate(tab.dataset.tab));
   });
   activate("sheet");
+}
+
+function resolveIconPack(value) {
+  return ICON_PACKS[value] ? value : DEFAULT_ICON_PACK;
+}
+
+function loadIconPack() {
+  return resolveIconPack(localStorage.getItem(ICON_PACK_KEY));
+}
+
+function saveIconPack(pack) {
+  localStorage.setItem(ICON_PACK_KEY, pack);
+}
+
+function applyIconPack(pack) {
+  const resolved = resolveIconPack(pack);
+  const icons = document.querySelectorAll("[data-icon]");
+  icons.forEach((icon) => {
+    const name = icon.dataset.icon;
+    if (!name || icon.tagName !== "IMG") {
+      return;
+    }
+    icon.src = `/icons/${resolved}/${name}.svg`;
+    if (resolved !== DEFAULT_ICON_PACK) {
+      icon.onerror = () => {
+        icon.onerror = null;
+        icon.src = `/icons/${DEFAULT_ICON_PACK}/${name}.svg`;
+      };
+    } else {
+      icon.onerror = null;
+    }
+  });
+  return resolved;
+}
+
+function syncIconPackControl() {
+  if (!iconPackSelect) {
+    return;
+  }
+  iconPackSelect.value = state.iconPack;
 }
 
 function clampVolume(value, fallback) {
@@ -2439,6 +2487,19 @@ bindAudioControl(soundInfoInput, "info");
 bindAudioControl(soundWarningInput, "warning");
 bindAudioControl(soundAlertInput, "alert");
 bindAudioControl(soundLevelUpInput, "level_up");
+
+state.iconPack = loadIconPack();
+state.iconPack = applyIconPack(state.iconPack);
+syncIconPackControl();
+
+if (iconPackSelect) {
+  iconPackSelect.addEventListener("change", () => {
+    const selected = resolveIconPack(iconPackSelect.value);
+    state.iconPack = applyIconPack(selected);
+    saveIconPack(state.iconPack);
+    syncIconPackControl();
+  });
+}
 
 tokenInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {

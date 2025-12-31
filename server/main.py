@@ -84,14 +84,19 @@ def create_app() -> FastAPI:
     server_dir = Path(__file__).resolve().parent
     host_ui = base_dir / "static" / "host"
     player_ui = base_dir / "static" / "player"
+    icons_dir = base_dir / "static" / "icons"
     fallback_host_ui = server_dir / "static" / "host"
     fallback_player_ui = server_dir / "static" / "player"
+    fallback_icons_dir = server_dir / "static" / "icons"
     host_ui = host_ui if host_ui.exists() else fallback_host_ui
     player_ui = player_ui if player_ui.exists() else fallback_player_ui
+    icons_dir = icons_dir if icons_dir.exists() else fallback_icons_dir
     if host_ui.exists():
         app.mount("/host", StaticFiles(directory=host_ui, html=True), name="host")
     if player_ui.exists():
         app.mount("/player", StaticFiles(directory=player_ui, html=True), name="player")
+    if icons_dir.exists():
+        app.mount("/icons", StaticFiles(directory=icons_dir), name="icons")
 
     @app.websocket("/ws")
     async def events_ws(websocket: WebSocket, token: str, after_seq: int = 0) -> None:
